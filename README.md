@@ -72,7 +72,7 @@ Isolation Forest 53%, tight fixed rule (>=10 errors/60 s) 21%, v1 rules 0%. Thre
 Weak spot: scanners with only 15% 404s at 3-15 requests/min (v2 detects 65-82%).
 Caveats: synthetic data; the augmentation matches the generator's evasion family; no comparison with Elastic/Wazuh.
 
-## Known limitations (be upfront about these)
+## Known limitations
 * ML scores are on SYNTHETIC data where attacks separate cleanly; expect lower accuracy on real logs. Validate on real data.
 * Unsupervised anomaly detection says "unusual", not "malicious": it flagged legitimate crawlers. Its result also depends on the
   training day and threshold (training on a day that contained crawlers made it miss all stealth scanners).
