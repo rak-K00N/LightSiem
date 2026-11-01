@@ -1,0 +1,118 @@
+{
+ "dataset": {
+  "auth_lines": 18588,
+  "web_lines": 184500,
+  "events": 203088,
+  "attackers": 44,
+  "legit_ips_with_noise": "10 SSH users with 10-18 typos/day + heavy web clients with ~4% 404s"
+ },
+ "ours": {
+  "tp": 44,
+  "fp": 0,
+  "fn": 0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0
+ },
+ "baseline_naive_totals": {
+  "tp": 44,
+  "fp": 37,
+  "fn": 0,
+  "precision": 0.543,
+  "recall": 1.0,
+  "f1": 0.704
+ },
+ "recall_by_attack_type": {
+  "ssh_bruteforce": 1.0,
+  "ssh_slow": 1.0,
+  "ssh_compromise": 1.0,
+  "web_scan": 1.0
+ },
+ "compromise_detected": "4/4",
+ "detection_delay_s": {
+  "median": 13.0,
+  "p90": 41,
+  "max": 1565
+ },
+ "traffic_spike": {
+  "alerts_total": 24,
+  "true_alert": true,
+  "false_alerts": 23,
+  "delay_s": 0,
+  "other_spike_alerts_inside_attack_windows": 23
+ },
+ "control_run_no_attacks": {
+  "events": 166521,
+  "false_alerts": 2,
+  "by_rule": {
+   "traffic_spike": 2
+  }
+ },
+ "evasion_test": {
+  "20/min": {
+   "detected": true,
+   "rule": "ssh_bruteforce",
+   "after_s": 21
+  },
+  "10/min": {
+   "detected": true,
+   "rule": "ssh_bruteforce",
+   "after_s": 42
+  },
+  "5/min": {
+   "detected": true,
+   "rule": "ssh_low_and_slow",
+   "after_s": 468
+  },
+  "2/min": {
+   "detected": true,
+   "rule": "ssh_low_and_slow",
+   "after_s": 1170
+  },
+  "1/min": {
+   "detected": true,
+   "rule": "ssh_low_and_slow",
+   "after_s": 2340
+  },
+  "0.75/min": {
+   "detected": true,
+   "rule": "ssh_low_and_slow",
+   "after_s": 3120
+  },
+  "0.5/min": {
+   "detected": false,
+   "rule": null,
+   "after_s": null
+  },
+  "0.25/min": {
+   "detected": false,
+   "rule": null,
+   "after_s": null
+  }
+ },
+ "performance": {
+  "events": 203088,
+  "seconds": 2.771,
+  "events_per_sec": 73298,
+  "peak_rss_mb": 27.3,
+  "db_size_mb": 49.3,
+  "raw_log_mb": 19.9
+ },
+ "search_latency": {
+  "text \"Failed password\"": {
+   "indexed_ms": 1.25,
+   "linear_scan_ms": 22.29,
+   "speedup_x": 18
+  },
+  "all events from one IP": {
+   "indexed_ms": 0.01,
+   "linear_scan_ms": 30.58,
+   "speedup_x": 3058
+  },
+  "text \"404\" in 1-hour window": {
+   "indexed_ms": 7.9,
+   "linear_scan_ms": 28.73,
+   "speedup_x": 4
+  }
+ }
+}

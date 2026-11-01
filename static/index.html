@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LightSIEM</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mut:#667085;--bd:#e3e6eb;--ac:#2a3a8c;--hi:#d92d20;--me:#dc6803;--cr:#7a1010}
+@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b2029;--tx:#e8ebf2;--mut:#9aa3b5;--bd:#2c3340;--ac:#8fa2ff}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:14px 20px;border-bottom:1px solid var(--bd);background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0;color:var(--ac)}main{padding:16px 20px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;min-width:0}.card h2{font-size:13px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.wide{grid-column:1/-1}.kpi{display:flex;gap:22px;flex-wrap:wrap}.kpi b{display:block;font-size:22px}.kpi span{color:var(--mut);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--bd);vertical-align:top}th{color:var(--mut);font-weight:600}
+.scroll{overflow:auto;max-height:300px}.sev-high,.sev-critical{color:var(--hi);font-weight:600}.sev-medium,.sev-warning{color:var(--me)}.sev-critical{color:var(--cr)}
+form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}input,select,button{font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--tx)}button{background:var(--ac);color:#fff;border:0;cursor:pointer}
+canvas{width:100%;height:170px;display:block}.ip{cursor:pointer;color:var(--ac)}
+</style></head><body>
+<header><h1>LightSIEM</h1><div class="kpi" id="kpi"></div></header>
+<main>
+<div class="card wide"><h2>Events per minute</h2><canvas id="tl"></canvas></div>
+<div class="card"><h2>Alerts</h2><div class="scroll"><table id="al"><thead><tr><th>Time (UTC)</th><th>Rule</th><th>Sev</th><th>Source IP</th><th>Detail</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card"><h2>Top source IPs</h2><div class="scroll"><table id="top"><thead><tr><th>IP</th><th>Events</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card wide"><h2>Search events</h2>
+<form id="f"><input id="q" placeholder="text e.g. Failed password"><input id="ip" placeholder="source IP"><select id="cat"><option value="">all categories</option><option>ssh_fail</option><option>ssh_ok</option><option>ssh_invalid_user</option><option>http</option><option>other</option></select><button>Search</button><span id="cnt" style="align-self:center;color:var(--mut)"></span></form>
+<div class="scroll"><table id="ev"><thead><tr><th>Time (UTC)</th><th>Category</th><th>Sev</th><th>IP</th><th>User</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
+</main>
+<script>
+const $=s=>document.querySelector(s),get=u=>fetch(u).then(r=>r.json()),fmt=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fill(sel,rows){$(sel+' tbody').innerHTML=rows.join('')}
+function draw(data,alerts){const c=$('#tl'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);
+ if(!data.length)return;const max=Math.max(...data.map(d=>d.n)),t0=data[0].t,t1=data[data.length-1].t,sp=Math.max(t1-t0,60),cs=getComputedStyle(document.body);
+ const bw=Math.max(1,w/(sp/60)-0.5),X=t=>(t-t0)/sp*(w-bw),Y=n=>h-14-(n/max)*(h-24);x.fillStyle=cs.getPropertyValue('--ac');
+ data.forEach(d=>x.fillRect(X(d.t),Y(d.n),bw,h-14-Y(d.n)));x.fillStyle=cs.getPropertyValue('--hi');
+ alerts.filter(a=>a.rule==='traffic_spike').forEach(a=>{x.fillRect(X(a.ts),0,2,h-14)});x.fillStyle=cs.getPropertyValue('--mut');x.font='11px system-ui';
+ x.fillText(fmt(t0).slice(5,16),2,h-2);x.fillText(fmt(t1).slice(5,16),w-80,h-2);x.fillText('max '+max+'/min',w-90,12)}
+async function search(){const p=new URLSearchParams({q:$('#q').value,ip:$('#ip').value,category:$('#cat').value,limit:200});const r=await get('/api/events?'+p);
+ $('#cnt').textContent=r.count.toLocaleString()+' matching events';fill('#ev',r.events.map(e=>`<tr><td>${fmt(e.ts)}</td><td>${e.category}</td><td class="sev-${e.severity}">${e.severity}</td><td>${esc(e.src_ip)}</td><td>${esc(e.user)}</td><td>${esc(e.msg)}</td></tr>`))}
+async function load(){const [s,al,tl,top]=await Promise.all([get('/api/stats'),get('/api/alerts?limit=100'),get('/api/timeline?bucket=60'),get('/api/top_ips?limit=10')]);
+ $('#kpi').innerHTML=`<div><b>${s.events.toLocaleString()}</b><span>events</span></div><div><b>${s.alerts}</b><span>alerts</span></div><div><b>${s.categories.ssh_fail||0}</b><span>failed SSH logins</span></div><div><b>${s.categories.http||0}</b><span>HTTP requests</span></div>`;
+ fill('#al',al.map(a=>`<tr><td>${fmt(a.ts)}</td><td>${a.rule}</td><td class="sev-${a.severity}">${a.severity}</td><td class="ip">${esc(a.src_ip)}</td><td>${esc(a.detail)}</td></tr>`));
+ fill('#top',top.map(t=>`<tr><td class="ip">${esc(t.ip)}</td><td>${t.n}</td></tr>`));draw(tl,al)}
+document.addEventListener('click',e=>{if(e.target.classList.contains('ip')){$('#ip').value=e.target.textContent;search();$('#f').scrollIntoView()}});
+$('#f').onsubmit=e=>{e.preventDefault();search()};load();search();setInterval(load,10000);addEventListener('resize',load);
+</script></body></html>
