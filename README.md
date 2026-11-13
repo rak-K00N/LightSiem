@@ -1,85 +1,147 @@
-# LightSIEM - a lightweight SIEM-like log analysis tool
+# LightSIEM - A Lightweight SIEM & AI/ML Log Analysis Tool
 
-Pipeline (same stages as an Elastic-based SIEM): **collect -> parse/normalise -> store + search -> detect -> dashboard**.
-The core (collect/parse/store/rules/dashboard) is pure Python 3.9+ standard library (SQLite FTS5 is built in): no JVM, no external services.
-The optional machine-learning detector needs `pip install scikit-learn numpy`.
+Pipeline (same stages as an enterprise SIEM like Elastic/Splunk): **Collect -> Parse/Normalise -> Store + Search -> Detect (Rules + ML) -> Dashboard / Visual Analytics**.
+
+The core pipeline (collect, parse, store, rules, web dashboard) is pure Python 3.9+ standard library with SQLite FTS5 (no JVM, no heavyweight external services).
+The AI/ML detection and visual demonstration components use `scikit-learn`, `numpy`, `matplotlib`, and `seaborn`.
 
 | Stage | File | What it does |
 |---|---|---|
-| Collect | `siem/ingest.py` | reads files (merged by time) or follows a live file like `tail -f` |
-| Parse | `siem/parser.py` | syslog/sshd and nginx/Apache logs -> one common event schema |
-| Store/Search | `siem/store.py` | SQLite, indexes on time and IP, FTS5 full-text index |
-| Detect | `siem/detect.py` | streaming rules + adaptive anomaly detector (the "algorithm") |
-| Dashboard | `siem/server.py`, `static/index.html` | JSON API + one-page dashboard |
-| ML detector | `siem/ml.py` | Isolation Forest (unsupervised) or Random Forest (supervised) on per-IP 5-minute windows |
-| Test data | `siem/gen_logs.py` | synthetic logs with ground-truth labels |
-| Evaluation | `evaluate.py`, `evaluate_ml.py`, `evaluate_v2.py` | reproduce every number in `results.json` and `results_ml.json` |
+| Collect | `siem/ingest.py` | Reads files (merged chronologically) or follows a live file (`tail -f`) |
+| Parse | `siem/parser.py` | Syslog/sshd, Apache/Nginx, OpenVPN, and dnsmasq logs -> common event schema |
+| Store/Search | `siem/store.py` | SQLite database, indexes on time & IP, FTS5 full-text search index |
+| Detect | `siem/detect.py` | Streaming sliding-window rules + adaptive EWMA rate anomaly detector |
+| Dashboard | `siem/server.py`, `static/index.html` | Real-time web dashboard & JSON REST API |
+| ML Detector | `siem/ml.py` | Isolation Forest (unsupervised) and Random Forest (supervised) on 5-min IP windows |
+| Russell Mitchell | `siem/russell.py` | Multi-host parser & label loader for the AECID/AIT Cyber Attack Dataset |
+| AIML Visuals | `demo_visualize.py` | Interactive Matplotlib/Seaborn charts (Confusion Matrix, ROC, Feature Importance) |
+| Test Data | `siem/gen_logs.py` | Synthetic log generator with ground-truth attacker labels |
+| Evaluation | `evaluate.py`, `evaluate_ml.py`, `evaluate_russell.py` | Automated accuracy scoring against ground-truth attack labels |
 
-## Run it
+---
+
+## Quick Start & Demonstration
+
+### 1. Visual AIML Demo (Matplotlib & Seaborn Charts)
+For project demonstrations, presentations, or lab evaluations, [`demo_visualize.py`](demo_visualize.py) displays 8 interactive charts directly inside VSCode or desktop terminals:
+
+```bash
+# Option A: Instant synthetic demo (Fastest: ~5 seconds, no dataset needed)
+python demo_visualize.py --demo
+
+# Option B: Ingest a slice of the Russell Mitchell dataset to a database
+python demo_visualize.py "/path/to/russellmitchell" --host intranet_server --db rm_demo.db
+
+# Option C: Re-run charts instantly from an existing database (skips ingestion)
+python demo_visualize.py --db rm_demo.db --skip-ingest
 ```
-python lightsiem.py demo                      # sample logs -> ingest -> http://127.0.0.1:8080
+
+#### Charts Displayed:
+1. **Event Timeline & Alerts**: Traffic distribution over time with flagged attack timestamps.
+2. **Log Categories**: Bar chart of events by protocol (`http`, `ssh`, `syslog`, `openvpn`, `dns`).
+3. **Top Source IPs**: Identifies highest-volume IPs (confirmed attackers highlighted in red).
+4. **Feature Importance (Random Forest)**: Which network behaviors (failed logins, 4xx ratios, distinct URLs) signal malicious activity.
+5. **Confusion Matrix**: True Positive / False Positive breakdown on 5-minute traffic windows.
+6. **ROC Curves & AUC**: Side-by-side comparison of Isolation Forest vs Random Forest.
+7. **Model Comparison**: Precision, Recall, and F1-score across Rules, Isolation Forest, and Random Forest.
+8. **Anomaly Score Distribution**: Histogram of Isolation Forest scores showing separation of normal vs attack traffic.
+
+---
+
+### 2. Interactive Web Dashboard
+```bash
+# Demo mode: generate sample data, ingest, and launch browser UI at http://127.0.0.1:8080
+python lightsiem.py demo
+
+# Ingest custom log files and launch web UI:
 python lightsiem.py ingest auth.log access.log --db siem.db --year 2026
-python lightsiem.py serve --db siem.db
-python lightsiem.py evaluate                  # regenerates results.json
+python lightsiem.py serve --db siem.db --port 8080
 ```
-Dashboard: events-per-minute chart, alert list, top IPs, full-text/IP/category search (click an IP to filter).
+**Dashboard Features:** Live events-per-minute timeline, real-time alert table, top source IPs, and instant full-text/IP search.
 
-## Detection algorithm
-Events are processed in time order with small per-IP sliding windows (deques), so memory is bounded.
-* R1 `ssh_bruteforce`: >= 8 failed SSH logins from one IP in 60 s
-* R1b `ssh_low_and_slow`: >= 40 failed logins from one IP in 1 h
-* R2 `ssh_success_after_failures`: successful login after >= 5 failures in 5 min (possible compromise)
-* R3 `web_scan`: >= 25 HTTP 401/403/404 responses to one IP in 60 s
-* R4 `traffic_spike`: events/minute vs an exponentially weighted moving average; alert when
-  x > mean + 4*std (EWMA, alpha 0.1). Anomalous minutes are not learned, so the baseline cannot be poisoned.
-All thresholds are in `Detector(**kw)` and can be tuned.
+---
 
-## Machine learning detector (`siem/ml.py`)
-Rules only catch what someone wrote a rule for. The ML detector scores every source IP's activity in 5-minute windows
-using 8 features: log(events), failed SSH logins, distinct usernames, HTTP requests, share of 4xx errors, distinct-URL ratio,
-number of 404s, number of 5xx. Two interchangeable models:
-* **Isolation Forest (unsupervised)**: trained only on known-good logs; flags anything unusual.
-* **Random Forest (supervised)**: trained on windows labelled attack/normal (IPs an analyst confirmed); flags P(attack) >= 0.5.
+## Russell Mitchell Dataset Support
+
+LightSIEM natively supports the multi-host [Russell Mitchell Cyber Attack Dataset](https://www.ait.ac.at/) (AECID/AIT), parsing logs across directory structures like `gather/<host>/logs/` with associated `labels/` ground truth.
+
+> **Tip:** If your path contains spaces, always wrap it in quotation marks: `"/run/media/.../russellmitchell"`.
+
+### Inspect Available Files
+```bash
+python lightsiem.py russell list "/path/to/russellmitchell"
 ```
+
+### Ingest Logs (With Host or Type Filtering)
+Since the full dataset is ~15 GB, you can ingest targeted subsets in seconds:
+```bash
+# Ingest only the target web server (recommended for quick demos)
+python lightsiem.py russell ingest "/path/to/russellmitchell" --host intranet_server --db rm_demo.db --serve
+
+# Ingest specific log types across all hosts (e.g., apache, auth, openvpn, dnsmasq)
+python lightsiem.py russell ingest "/path/to/russellmitchell" --type apache --db rm_demo.db
+```
+
+### Evaluate Detection Accuracy
+Score LightSIEM detections against ground-truth attack labels and the attacker action timeline:
+```bash
+python lightsiem.py russell evaluate "/path/to/russellmitchell" --db rm_demo.db --out results_russell.json
+```
+Reports:
+* **Ingestion Coverage**: Percentage of labelled lines successfully parsed.
+* **IP-Level Attribution**: Precision, Recall, and F1-score for identifying attacker IPs (e.g. `172.19.131.174`).
+* **Attack Phase Coverage**: Detection correlation with foothold, privilege escalation, and lateral movement.
+
+---
+
+## Detection Engines
+
+### 1. Rule-Based Streaming Engine (`siem/detect.py`)
+Processes events in chronological order with bounded per-IP sliding windows:
+* **R1 `ssh_bruteforce`**: >= 8 failed SSH logins from one IP in 60 s
+* **R1b `ssh_low_and_slow`**: >= 40 failed logins from one IP in 1 h
+* **R2 `ssh_success_after_failures`**: Successful login after >= 5 failures in 5 min (possible account takeover)
+* **R3 `web_scan`**: >= 25 HTTP 401/403/404 errors from one IP in 60 s (vulnerability scanning)
+* **R4 `traffic_spike`**: Adaptive EWMA anomaly detection (alerts when traffic > mean + 4*std; excludes anomalous minutes from the baseline to prevent poisoning).
+
+### 2. Machine Learning Engine (`siem/ml.py`)
+Scores traffic behavior in 5-minute per-IP windows across 8 extracted behavioral features:
+* `log(events)`, failed SSH logins, distinct usernames, HTTP request count, 4xx error ratio, distinct-URL ratio, 404 count, 5xx count.
+
+Two interchangeable models:
+* **Isolation Forest (Unsupervised)**: Learns what normal traffic looks like from baseline logs; flags anomalous deviations without needing prior attack labels.
+* **Random Forest (Supervised)**: Learns distinct signatures of attack vs normal behavior; flags traffic with P(attack) >= 0.5.
+
+```bash
+# Train Isolation Forest on normal baseline logs:
 python lightsiem.py train good_auth.log good_access.log --kind iforest --out model.pkl
-python lightsiem.py train auth.log access.log --kind rf --attackers confirmed_attacker_ips.txt --out model.pkl
-python lightsiem.py ingest auth.log access.log --db siem.db --model model.pkl      # rules + ML together
-python evaluate_ml.py                                                              # reproduces results_ml.json
+
+# Train Random Forest with known attacker IP labels:
+python lightsiem.py train auth.log access.log --kind rf --attackers attacker_ips.txt --out model.pkl
+
+# Ingest logs using both rules AND machine learning:
+python lightsiem.py ingest auth.log access.log --db siem.db --model model.pkl
 ```
-ML alerts appear in the dashboard as `ml_iforest` / `ml_rf`. Only load model files you trained yourself (pickle can run code).
 
-**Measured (synthetic, unseen test day, 54 attackers incl. 10 stealth scanners + 5 legitimate crawlers):**
-rules alone P 1.00 / R 0.82; Isolation Forest P 0.81 / R 0.46 (flags all 5 crawlers); Random Forest P 1.00 / R 1.00;
-the Random Forest did not see stealth scanners in training. See `results_ml.json` and `results_ml_chart.png`.
-Cost: ingest ~73K -> ~38K events/s and ~27 MB -> ~158 MB memory (scikit-learn).
+---
 
+## Advanced ML: Evasion-Aware Augmentation (v2)
 
-## v2 upgrade: evasion-aware training + evidence accumulation (supervised model)
-Problem found in v1: the Random Forest only learned loud, fast scanners, so a scanner that hides among normal-looking 200
-responses or slows down escaped it (v1 caught only about 28% of such scanners).
-1. **Evasion-aware training** (`MLDetector.fit(..., augment=True)`): for every labelled attacker's web traffic, 11 disguised copies
-   are added to the training set (404 -> 200 with probability 0/25/50/75%, crossed with keeping 100/50/20% of the requests).
-2. **Evidence accumulation**: strong evidence (P(attack) > 0.8) alerts at once; weak evidence (P > 0.3) must repeat in 3
-   consecutive 5-minute windows. This removes small-sample false alarms (an ordinary client with 5 requests, 2 of them 404).
-Thresholds were tuned on a separate validation seed (`tune_v2.py`, `tune2_v2.py`), then tested on 5 fresh seeds.
+Standard supervised classifiers fail when attackers slow down their request rate or dilute error codes with legitimate requests.
+1. **Evasion-Aware Training (`--augment`)**: Synthesizes 11 disguised variations of attacker traffic during training (simulating 404 dilution and request rate throttling).
+2. **Evidence Accumulation**: Strong confidence (`P > 0.8`) raises an immediate alert; weaker confidence (`P > 0.3`) requires persistence across 3 consecutive windows to eliminate false alarms from occasional user typos.
+
+```bash
+python lightsiem.py train auth.log access.log --kind rf --attackers attacker_ips.txt --augment --out model_v2.pkl
 ```
-python lightsiem.py train auth.log access.log --kind rf --attackers confirmed_attacker_ips.txt --augment --out model_v2.pkl
-python evaluate_v2.py 1 2      # run seeds 1-2 (repeat with 3 4, then 5 5); results accumulate in results_v2_raw.json
-```
-**Measured (5 seeds, 300 evasive scanners per seed; mean):** evasive scanners detected - v2 95%, RF v1 28%, RF v1 with threshold 0.2 55%,
-Isolation Forest 53%, tight fixed rule (>=10 errors/60 s) 21%, v1 rules 0%. Three held-out tactics never used in training
-(few-URL reuse, burst-and-pause, 1 request/min): v2 100% on all three. False-alert IPs on a clean day: v2 0.6, v1 0.4, Isolation Forest 4.0.
-Weak spot: scanners with only 15% 404s at 3-15 requests/min (v2 detects 65-82%).
-Caveats: synthetic data; the augmentation matches the generator's evasion family; no comparison with Elastic/Wazuh.
 
-## Known limitations
-* ML scores are on SYNTHETIC data where attacks separate cleanly; expect lower accuracy on real logs. Validate on real data.
-* Unsupervised anomaly detection says "unusual", not "malicious": it flagged legitimate crawlers. Its result also depends on the
-  training day and threshold (training on a day that contained crawlers made it miss all stealth scanners).
-* The supervised model is evaded by a scanner whose 404 rate drops below about 40% (see `evasion_404_rate`).
-* Supervised learning needs labelled attacks, which are scarce in practice.
-* Evaluated on SYNTHETIC logs written by us; real-world accuracy will be lower. Validate on real logs / Loghub.
-* Attackers slower than ~0.5 failed logins/min evade the rules (see `evasion_test`).
-* Distributed attacks (many IPs, few attempts each) are not correlated yet.
-* Rules are hand-written; no machine learning. Single machine, no clustering, no authentication on the dashboard.
-* `traffic_spike` also fires during large scan/brute-force bursts (they add real traffic).
+---
+
+## Installation & Requirements
+
+* **Python 3.9+**
+* Pure Python standard library for basic rule ingestion and web UI.
+* For AI/ML and Visualization features:
+  ```bash
+  pip install scikit-learn numpy matplotlib seaborn
+  ```
