@@ -1,37 +1,32 @@
 #!/usr/bin/env python3
 """
-LightSIEM – Visual Demo  (matplotlib charts, runs inline in VSCode)
-====================================================================
-THREE ways to run — pick the fastest one for your situation:
+LightSIEM – Visual Demo (runs in VSCode like your AIML lab programs)
+=====================================================================
+Shows 8 real AI/ML charts:
+  Chart 1 – Event timeline with attack alerts overlaid
+  Chart 2 – Bar chart: events per log category
+  Chart 3 – Top 10 source IPs (attacker in red)
+  Chart 4 – Feature importance (Random Forest)
+  Chart 5 – Confusion Matrix (Random Forest, 5-min traffic windows)
+  Chart 6 – ROC curve (Random Forest vs Isolation Forest with AUC)
+  Chart 7 – Bar chart: Precision / Recall / F1 (Rules vs IF vs RF)
+  Chart 8 – Anomaly score distribution (Isolation Forest)
 
-  MODE A – Built-in synthetic logs (FASTEST, ~5 seconds, no real data needed)
-  -------------------------------------------------------------------------
+Usage
+-----
+  # 1. Default (uses local dataset on intranet_server):
+  python demo_visualize.py
+
+  # 2. Fastest instant demo (synthetic logs, ~5 seconds):
   python demo_visualize.py --demo
 
-  MODE B – Use an already-ingested database (FAST, skips all ingestion)
-  -------------------------------------------------------------------------
-  python demo_visualize.py --db rm.db --skip-ingest
-
-  MODE C – Ingest a small slice of the Russell Mitchell dataset first
-  -------------------------------------------------------------------------
-  python demo_visualize.py "/run/media/faang/UBUNTU 26_0/lightsiem data/russellmitchell" \\
-      --host intranet_server --db rm_demo.db
-
-  Tip: run MODE C once to build the .db file, then use MODE B every time after.
-
-Charts produced (same style as your AIML lab programs):
-  1  Event timeline with alert markers
-  2  Events per log category  (bar chart)
-  3  Top 10 source IPs  (horizontal bar, attackers in red)
-  4  Feature importance  (Random Forest)
-  5  Confusion Matrix    (Random Forest)
-  6  ROC Curve           (Isolation Forest vs Random Forest)
-  7  Precision / Recall / F1  (Rules vs IF vs RF)
-  8  Anomaly score distribution  (Isolation Forest)
+  # 3. Specify custom host or path:
+  python demo_visualize.py /home/faang/Documents/LightSIEM_prototype/russellmitchell --host intranet_server
 """
 
-import argparse, os, sys, shutil, heapq, warnings
+import argparse, os, sys, math, heapq, shutil, warnings
 warnings.filterwarnings('ignore')
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
@@ -46,152 +41,81 @@ from siem.ml import MLDetector, FEATURES
 
 sns.set_theme(style='darkgrid', palette='muted')
 
-# ─────────────────────────── CLI ────────────────────────────────────────────
+DEFAULT_DATASET = '/home/faang/Documents/LightSIEM_prototype/russellmitchell'
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 ap = argparse.ArgumentParser(description='LightSIEM – Visual Demo')
-ap.add_argument('root', nargs='?',
-                help='Russell Mitchell dataset root (optional; omit with --demo)')
-ap.add_argument('--demo',  action='store_true',
-                help='Use built-in synthetic logs — no real dataset needed')
-ap.add_argument('--db',    default=':memory:',
-                help='SQLite database (default: in-memory). '
-                     'Point to an existing .db file with --skip-ingest to avoid re-ingesting.')
+ap.add_argument('root', nargs='?', default=DEFAULT_DATASET,
+                help=f'Path to Russell Mitchell dataset root (default: {DEFAULT_DATASET})')
+ap.add_argument('--demo', action='store_true',
+                help='Use built-in synthetic attack logs (~5 sec run, no dataset required)')
+ap.add_argument('--host', action='append', dest='hosts', metavar='HOST',
+                help='Filter by host (e.g. --host intranet_server).')
+ap.add_argument('--type', action='append', dest='types', metavar='TYPE',
+                help='Filter by log type (apache, auth, syslog …).')
+ap.add_argument('--year', type=int, default=2022, help='Syslog year (default 2022)')
+ap.add_argument('--db', default='rm_local.db',
+                help='SQLite database path (default: rm_local.db)')
 ap.add_argument('--skip-ingest', action='store_true',
-                help='Do NOT ingest; use whatever is already in --db. '
-                     'Great for re-running charts after a previous ingest.')
-ap.add_argument('--host',  action='append', dest='hosts',  metavar='HOST')
-ap.add_argument('--type',  action='append', dest='types',  metavar='TYPE')
-ap.add_argument('--year',  type=int, default=2022)
+                help='Skip log parsing and reuse existing database')
 args = ap.parse_args()
 
-# ─────────────────────────── helpers ────────────────────────────────────────
 def safe_metric(fn, yt, yp, **kw):
     try:
         return fn(yt, yp, **kw)
     except Exception:
         return 0.0
 
-
-def score_windows(ml_model, all_events, attacker_ips):
-    """Return y_true and suspicion scores for every 5-min window."""
-    from siem.ml import _Win
-    cur, wins, rows = None, {}, []
-    for e in all_events:
-        if not e['src_ip']:
-            continue
-        b = e['ts'] // ml_model.window
-        if b != cur:
-            if cur is not None:
-                for ip, w in wins.items():
-                    if w.n >= ml_model.min_events:
-                        rows.append((ip, w.vector()))
-            cur, wins = b, {}
-        wins.setdefault(e['src_ip'], _Win()).add(e)
-    if cur is not None:
-        for ip, w in wins.items():
-            if w.n >= ml_model.min_events:
-                rows.append((ip, w.vector()))
-
-    if not rows:
-        return np.array([]), np.array([])
-    ips, vecs = zip(*rows)
-    X = np.array(vecs)
-    if ml_model.kind == 'rf':
-        scores = ml_model.model.predict_proba(X)[:, 1]
-    else:
-        scores = -ml_model.model.score_samples(X)
-    y_true = np.array([ip.split('~')[0] in attacker_ips for ip in ips])
-    return y_true, scores
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 1 – Get events into the Store
-# ════════════════════════════════════════════════════════════════════════════
 store = Store(args.db)
 
-# ── MODE A: synthetic logs ───────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Ingest / Data Prep
+# ---------------------------------------------------------------------------
 if args.demo:
-    print('\n[MODE A] Generating synthetic attack logs …')
+    print('\n[MODE: Synthetic Demo] Generating attack logs …')
     from siem.gen_logs import generate
     import json as _json
+    from siem.ingest import ingest, read_events as _re
     TMPDIR = '/tmp/lightsiem_demo_logs'
     shutil.rmtree(TMPDIR, ignore_errors=True)
     generate(TMPDIR, seed=7, scale=0.3, attacks=True, crawlers=True)
     truth = _json.load(open(f'{TMPDIR}/truth.json'))
-    YEAR  = 2026
+    YEAR = 2026
     FILES = [f'{TMPDIR}/auth.log', f'{TMPDIR}/access.log']
 
-    from siem.ingest import ingest, read_events as _re
-    det   = Detector()
+    det = Detector()
     stats = ingest(FILES, store, det, YEAR)
-    all_events = list(heapq.merge(*[_re(p, YEAR) for p in FILES],
-                                  key=lambda e: e['ts']))
-
+    all_events = list(heapq.merge(*[_re(p, YEAR) for p in FILES], key=lambda e: e['ts']))
     ATTACK_TYPES = ('ssh_bruteforce', 'ssh_slow', 'ssh_compromise', 'web_scan')
     attacker_ips = {ip for k in ATTACK_TYPES for ip in truth.get(k, [])}
     print(f'      {stats["events"]:,} events  |  {store.stats()["alerts"]:,} rule alerts')
-    print(f'      Ground-truth attacker IPs ({len(attacker_ips)}): {sorted(attacker_ips)[:5]} …')
+    print(f'      Attacker IPs: {len(attacker_ips)} unique IPs identified')
 
-# ── MODE B: re-use existing DB, skip ingest ──────────────────────────────────
-elif args.skip_ingest:
-    if args.db == ':memory:':
-        sys.exit('ERROR: --skip-ingest requires --db pointing to an existing file, not :memory:')
-    db_stats = store.stats()
-    if db_stats['events'] == 0:
-        sys.exit(f'ERROR: database "{args.db}" is empty. Run without --skip-ingest first.')
-    print(f'\n[MODE B] Using existing database "{args.db}"')
-    print(f'         {db_stats["events"]:,} events  |  {db_stats["alerts"]:,} alerts already stored')
-
-    # We still need an event stream for ML — re-read from whatever files we can find.
-    # For MODE B we train on stored events by reconstructing from the DB.
-    # (Simplified: use all stored events as proxies for window building.)
-    all_events = store.search(limit=2_000_000)   # list of dicts from DB
-    # DB rows don't have 'raw' but MLDetector._Win only uses ts/src_ip/category/status/msg
-    attacker_ips = set()   # unknown without labels — charts will show scores only
-    YEAR = args.year
-    print('      NOTE: attacker IPs unknown in MODE B (no label files). '
-          'Confusion matrix / ROC skipped; all other charts shown.')
-
-# ── MODE C: ingest a Russell slice ───────────────────────────────────────────
 else:
-    if not args.root:
-        ap.error('Provide a dataset root path, or use --demo / --skip-ingest')
+    ROOT = args.root
+    YEAR = args.year
+    hosts = args.hosts or ['intranet_server']  # default to victim server for fast demo
 
     from siem.russell import collect_log_files, load_labels, ingest_dataset
     from siem.ingest import read_events as _re
 
-    # Check if DB already has data to avoid re-ingesting accidentally
-    existing = store.stats()['events']
-    if existing > 0 and args.db != ':memory:':
-        print(f'\n[MODE C] Database "{args.db}" already has {existing:,} events.')
-        ans = input('         Skip ingestion and use existing data? [Y/n]: ').strip().lower()
-        if ans in ('', 'y', 'yes'):
-            args.skip_ingest = True
+    # Ingest if DB is empty or not skipped
+    existing_events = store.stats()['events']
+    if existing_events > 0 and args.skip_ingest:
+        print(f'\n[1/4] Using cached database "{args.db}" ({existing_events:,} events, ingestion skipped)')
+    else:
+        print(f'\n[1/4] Ingesting logs from {ROOT} (Host: {", ".join(hosts)}) …')
+        det = Detector()
+        stats = ingest_dataset(ROOT, store, detector=det, year=YEAR,
+                               host_filter=hosts, type_filter=args.types)
+        rule_alerts_count = store.stats().get('alerts', 0)
+        print(f'      {stats["events"]:,} events  |  {rule_alerts_count:,} alerts  |  {stats["events_per_sec"]:,.0f} eps')
 
-    YEAR = args.year
-
-    if not args.skip_ingest:
-        print(f'\n[MODE C] Ingesting Russell Mitchell slice …')
-        det   = Detector()
-        stats = ingest_dataset(args.root, store, detector=det, year=YEAR,
-                               host_filter=args.hosts, type_filter=args.types)
-        print(f'      {stats["events"]:,} events  |  {store.stats()["alerts"]:,} rule alerts  '
-              f'|  {stats["events_per_sec"]:,.0f} eps')
-
-    # Build event stream for ML
-    files = collect_log_files(args.root)
-    if args.hosts:
-        files = [(p, h, t) for p, h, t in files if h in args.hosts]
-    if args.types:
-        files = [(p, h, t) for p, h, t in files if t in args.types]
-    hint_hosts   = {p: h for p, h, t in files}
-    hint_sources = {p: t for p, h, t in files}
-    all_events = list(heapq.merge(
-        *[_re(p, YEAR, hint_host=hint_hosts.get(p),
-              hint_source=hint_sources.get(p)) for p, _, _ in files],
-        key=lambda e: e['ts']))
-
-    # Ground-truth attacker IPs from label files
-    all_labels   = load_labels(args.root)
+    # Load labels for ground truth
+    print('[2/4] Loading ground-truth labels …')
+    all_labels = load_labels(ROOT)
     attacker_ips = set()
     for gather_path, line_map in all_labels.items():
         if not os.path.isfile(gather_path):
@@ -211,40 +135,80 @@ else:
                             attacker_ips.add(e['src_ip'])
         except OSError:
             pass
-    print(f'      {len(attacker_ips)} attacker IP(s): {sorted(attacker_ips)}')
 
+    print(f'      {len(attacker_ips)} attacker IP(s) in ground truth: {sorted(attacker_ips)}')
 
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 2 – Train ML models  (always fast: runs on in-memory windows)
-# ════════════════════════════════════════════════════════════════════════════
-print('\n[ML] Training Isolation Forest (unsupervised) …')
+    # Load stream for ML window scoring
+    files = collect_log_files(ROOT)
+    if hosts:
+        files = [(p, h, t) for p, h, t in files if h in hosts]
+    if args.types:
+        files = [(p, h, t) for p, h, t in files if t in args.types]
+
+    hint_hosts   = {p: h for p, h, t in files}
+    hint_sources = {p: t for p, h, t in files}
+    all_events = list(heapq.merge(
+        *[_re(p, YEAR, hint_host=hint_hosts.get(p),
+              hint_source=hint_sources.get(p)) for p, _, _ in files],
+        key=lambda e: e['ts']
+    ))
+
+# ---------------------------------------------------------------------------
+# ML Training & Scoring
+# ---------------------------------------------------------------------------
+print('[3/4] Training Machine Learning Models (Isolation Forest & Random Forest) …')
 iforest = MLDetector(kind='iforest', min_events=5)
 iforest.fit(all_events)
 
-print('[ML] Training Random Forest (supervised) …')
 rf = MLDetector(kind='rf', min_events=5)
 rf.fit(all_events, attackers=attacker_ips if attacker_ips else None, augment=bool(attacker_ips))
 
-print('[ML] Scoring 5-minute traffic windows …')
-y_true_if, scores_if = score_windows(iforest, all_events, attacker_ips)
-y_true_rf, scores_rf = score_windows(rf,       all_events, attacker_ips)
+print('[4/4] Scoring 5-minute traffic windows …')
+def score_windows(ml_model, events):
+    from siem.ml import _Win
+    cur, wins, rows = None, {}, []
+    for e in events:
+        if not e['src_ip']:
+            continue
+        b = e['ts'] // ml_model.window
+        if b != cur:
+            if cur is not None:
+                for ip, w in wins.items():
+                    if w.n >= ml_model.min_events:
+                        rows.append((ip, w.vector()))
+            cur, wins = b, {}
+        wins.setdefault(e['src_ip'], _Win()).add(e)
+    if cur is not None:
+        for ip, w in wins.items():
+            if w.n >= ml_model.min_events:
+                rows.append((ip, w.vector()))
+    if not rows:
+        return np.array([]), np.array([])
+    ips, vecs = zip(*rows)
+    X = np.array(vecs)
+    if ml_model.kind == 'rf':
+        scores = ml_model.model.predict_proba(X)[:, 1]
+    else:
+        scores = -ml_model.model.score_samples(X)
+    y_true = np.array([ip.split('~')[0] in attacker_ips for ip in ips])
+    return y_true, scores
+
+y_true_if, scores_if = score_windows(iforest, all_events)
+y_true_rf, scores_rf = score_windows(rf, all_events)
 
 y_pred_if = (scores_if > iforest.threshold).astype(int) if len(scores_if) else np.array([])
-y_pred_rf = (scores_rf > rf.threshold).astype(int)      if len(scores_rf) else np.array([])
+y_pred_rf = (scores_rf > rf.threshold).astype(int) if len(scores_rf) else np.array([])
 
-rule_alerts  = store.alerts(limit=1_000_000)
+rule_alerts = store.alerts(limit=1_000_000)
 rule_alerted = {a['src_ip'] for a in rule_alerts if a['src_ip']}
-db_stats     = store.stats()
+db_stats = store.stats()
 
-
-# ════════════════════════════════════════════════════════════════════════════
-#  STEP 3 – CHARTS
-# ════════════════════════════════════════════════════════════════════════════
-total_charts = 8
-print(f'\nShowing {total_charts} charts — close each window to see the next.\n')
+print('\n======================================================')
+print(' Displaying 8 AIML Charts (Close each window to see next)')
+print('======================================================\n')
 
 # ── Chart 1: Event Timeline ──────────────────────────────────────────────────
-print('Chart 1/8 – Event Timeline')
+print('Plotting Chart 1: Event Timeline …')
 timeline = store.timeline(bucket=300)
 if timeline:
     import datetime
@@ -264,7 +228,7 @@ if timeline:
     ax.legend(); fig.tight_layout(); plt.show()
 
 # ── Chart 2: Events by Category ─────────────────────────────────────────────
-print('Chart 2/8 – Events by Category')
+print('Plotting Chart 2: Events by Category …')
 cats = db_stats.get('categories', {})
 if cats:
     lbls_c = sorted(cats, key=cats.get, reverse=True)
@@ -273,12 +237,12 @@ if cats:
     bars = ax.bar(lbls_c, vals_c, color=sns.color_palette('muted', len(lbls_c)))
     ax.bar_label(bars, fmt='%d', padding=3, fontsize=8)
     ax.set_title('Events Ingested — Breakdown by Log Category')
-    ax.set_xlabel('Category'); ax.set_ylabel('Event Count (log scale)')
+    ax.set_xlabel('Category'); ax.set_ylabel('Event Count')
     ax.set_yscale('log')
     plt.xticks(rotation=30, ha='right'); fig.tight_layout(); plt.show()
 
 # ── Chart 3: Top 10 Source IPs ───────────────────────────────────────────────
-print('Chart 3/8 – Top Source IPs')
+print('Plotting Chart 3: Top Source IPs …')
 top_ips = store.top_ips(limit=10)
 if top_ips:
     ip_lbs = [r['ip'] for r in top_ips]
@@ -291,7 +255,7 @@ if top_ips:
     ax.set_xlabel('Total Events'); fig.tight_layout(); plt.show()
 
 # ── Chart 4: Feature Importance (Random Forest) ──────────────────────────────
-print('Chart 4/8 – Feature Importance')
+print('Plotting Chart 4: Feature Importance …')
 imps   = rf.model.feature_importances_
 order  = np.argsort(imps)
 fig, ax = plt.subplots(figsize=(8, 4))
@@ -301,7 +265,7 @@ ax.set_title('Random Forest — Feature Importances\n(which network behaviour si
 ax.set_xlabel('Importance'); fig.tight_layout(); plt.show()
 
 # ── Chart 5: Confusion Matrix (Random Forest) ────────────────────────────────
-print('Chart 5/8 – Confusion Matrix')
+print('Plotting Chart 5: Confusion Matrix …')
 if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) > 1:
     cm_rf = confusion_matrix(y_true_rf, y_pred_rf)
     fig, ax = plt.subplots(figsize=(5, 4))
@@ -312,10 +276,10 @@ if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) > 1:
     ax.set_xlabel('Predicted'); ax.set_ylabel('Actual')
     fig.tight_layout(); plt.show()
 else:
-    print('      (Skipped — need both attacker and normal windows to draw CM)')
+    print('      (Skipping CM — only one class in ground truth for this slice)')
 
 # ── Chart 6: ROC Curve (IF vs RF) ────────────────────────────────────────────
-print('Chart 6/8 – ROC Curves')
+print('Plotting Chart 6: ROC Curves …')
 fig, ax = plt.subplots(figsize=(7, 6))
 ax.plot([0, 1], [0, 1], linestyle='--', color='grey', label='Random baseline')
 drawn = False
@@ -334,11 +298,11 @@ if drawn:
     ax.set_title('ROC Curve — Isolation Forest vs Random Forest')
     ax.legend(loc='lower right'); fig.tight_layout(); plt.show()
 else:
-    print('      (Skipped — need labelled attacker data for ROC)')
+    print('      (Skipping ROC — single class in ground truth)')
     plt.close(fig)
 
 # ── Chart 7: Precision / Recall / F1 ─────────────────────────────────────────
-print('Chart 7/8 – Precision / Recall / F1')
+print('Plotting Chart 7: Precision / Recall / F1 …')
 all_known_ips = rule_alerted | attacker_ips
 ip_list = sorted(all_known_ips)
 yt_rule = np.array([ip in attacker_ips for ip in ip_list])
@@ -370,7 +334,7 @@ ax.set_title('Detection Performance — Rules vs Isolation Forest vs Random Fore
 ax.set_ylabel('Score'); ax.legend(); fig.tight_layout(); plt.show()
 
 # ── Chart 8: Anomaly Score Distribution (Isolation Forest) ───────────────────
-print('Chart 8/8 – Anomaly Score Distribution')
+print('Plotting Chart 8: Anomaly Score Distribution …')
 if len(scores_if) > 0:
     fig, ax = plt.subplots(figsize=(8, 4))
     if len(np.unique(y_true_if)) > 1:
@@ -382,13 +346,9 @@ if len(scores_if) > 0:
         ax.hist(scores_if, bins=40, alpha=0.65, color='steelblue', label='All windows')
     ax.axvline(iforest.threshold, color='black', linestyle='--', linewidth=1.5,
                label=f'Detection threshold ({iforest.threshold:.3f})')
-    ax.set_title('Isolation Forest — Anomaly Score Distribution\n'
-                 '(windows to the right of the threshold are flagged as suspicious)')
-    ax.set_xlabel('Anomaly Score  (higher = more suspicious)')
-    ax.set_ylabel('Number of 5-minute Windows')
+    ax.set_title('Isolation Forest — Anomaly Score Distribution\n(windows right of threshold are flagged suspicious)')
+    ax.set_xlabel('Anomaly Score')
+    ax.set_ylabel('5-min Windows Count')
     ax.legend(); fig.tight_layout(); plt.show()
 
-print('\n✓ All charts done!')
-if args.db != ':memory:':
-    print(f'  Database saved at: {args.db}')
-    print(f'  Next time, run:  python demo_visualize.py --db {args.db} --skip-ingest')
+print('\n✓ Demonstration complete!')
