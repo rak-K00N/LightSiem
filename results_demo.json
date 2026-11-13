@@ -1,0 +1,235 @@
+{
+  "dataset": {
+    "root": "/run/media/faang/UBUNTU 26_0/lightsiem data/russellmitchell",
+    "label_files": 8,
+    "labelled_lines": 61862,
+    "year": 2022
+  },
+  "db": {
+    "path": "rm_demo.db",
+    "events": 12672,
+    "alerts": 3,
+    "categories": {
+      "http": 11006,
+      "other": 1663,
+      "ssh_ok": 3
+    }
+  },
+  "ingestion_coverage": {
+    "total_labelled_lines": 61862,
+    "total_parsed_lines": 7703,
+    "parse_coverage_pct": 12.5,
+    "by_label": {
+      "attacker": {
+        "labelled": 53056,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "attacker_change_user": {
+        "labelled": 8,
+        "parsed": 4,
+        "coverage_pct": 50.0
+      },
+      "attacker_http": {
+        "labelled": 7723,
+        "parsed": 7687,
+        "coverage_pct": 99.5
+      },
+      "attacker_vpn": {
+        "labelled": 28,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "crack_passwords": {
+        "labelled": 49,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "dirb": {
+        "labelled": 4493,
+        "parsed": 4462,
+        "coverage_pct": 99.3
+      },
+      "dns_scan": {
+        "labelled": 414,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "dnsteal": {
+        "labelled": 53056,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "dnsteal-dropped": {
+        "labelled": 48,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "dnsteal-received": {
+        "labelled": 53006,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "escalate": {
+        "labelled": 82,
+        "parsed": 12,
+        "coverage_pct": 14.6
+      },
+      "escalated_command": {
+        "labelled": 10,
+        "parsed": 5,
+        "coverage_pct": 50.0
+      },
+      "escalated_sudo_command": {
+        "labelled": 10,
+        "parsed": 5,
+        "coverage_pct": 50.0
+      },
+      "escalated_sudo_session": {
+        "labelled": 3,
+        "parsed": 3,
+        "coverage_pct": 100.0
+      },
+      "exfiltration-service": {
+        "labelled": 2,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "foothold": {
+        "labelled": 8724,
+        "parsed": 7691,
+        "coverage_pct": 88.2
+      },
+      "network_scan": {
+        "labelled": 92,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "service_scan": {
+        "labelled": 455,
+        "parsed": 12,
+        "coverage_pct": 2.6
+      },
+      "traceroute": {
+        "labelled": 4,
+        "parsed": 0,
+        "coverage_pct": 0.0
+      },
+      "webshell_cmd": {
+        "labelled": 44,
+        "parsed": 32,
+        "coverage_pct": 72.7
+      },
+      "webshell_upload": {
+        "labelled": 3,
+        "parsed": 3,
+        "coverage_pct": 100.0
+      },
+      "wpscan": {
+        "labelled": 3207,
+        "parsed": 3186,
+        "coverage_pct": 99.3
+      }
+    }
+  },
+  "ip_level_detection": {
+    "attacker_ips": [
+      "172.19.131.174"
+    ],
+    "alerted_ips": [
+      "172.19.131.174"
+    ],
+    "tp": [
+      "172.19.131.174"
+    ],
+    "fp": [],
+    "fn": [],
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "alerts_by_rule": {
+    "web_scan": 1,
+    "traffic_spike": 2
+  },
+  "attack_phase_detection": {
+    "foothold": "no parseable lines",
+    "escalate": {
+      "labelled_lines": 82,
+      "time_range": [
+        1642996762,
+        1642999086
+      ],
+      "alerts_in_window": 2,
+      "detected": true,
+      "alert_rules": [
+        "web_scan",
+        "traffic_spike"
+      ]
+    },
+    "exfiltrate": "no labelled lines",
+    "lateral": "no labelled lines",
+    "any_attacker": "no parseable lines"
+  },
+  "attack_timeline_summary": {
+    "total_actions": 55,
+    "action_counts": {
+      "vpn_connect": 1,
+      "traceroute_internet": 1,
+      "dns_brute_force": 1,
+      "host_discover_dmz": 1,
+      "host_discover_local": 1,
+      "service_scan": 1,
+      "dirb_scan": 1,
+      "recon_networks_finish": 1,
+      "wpscan": 1,
+      "upload_rce_shell": 1,
+      "check_whoami": 1,
+      "check_uname_r": 1,
+      "read_profile": 1,
+      "check_who": 1,
+      "check_meminfo": 1,
+      "check_uname_a": 1,
+      "check_user_id": 1,
+      "check_df": 1,
+      "check_netstat_nat": 1,
+      "check_id": 1,
+      "read_resolv": 1,
+      "check_netstat_t": 1,
+      "list_home": 1,
+      "check_last": 1,
+      "list_web_dir": 1,
+      "check_date": 1,
+      "list_www": 1,
+      "check_netstat_l": 1,
+      "clear": 1,
+      "check_wp_config": 1,
+      "check_ps_a": 1,
+      "read_passwd": 1,
+      "check_release": 1,
+      "check_cpuinfo": 1,
+      "dump_wp_users": 1,
+      "read_group": 1,
+      "check_uptime": 1,
+      "check_network_config": 1,
+      "crack_wphash": 1,
+      "decide_crack_method": 1,
+      "recon_host_finish": 1,
+      "reverse_shell_listen": 1,
+      "open_reverse_shell": 1,
+      "wait_reverse_shell": 1,
+      "open_pty": 1,
+      "login_user": 1,
+      "read_fstab": 1,
+      "check_ps_aux": 1,
+      "check_sudo": 1,
+      "check_uname_ar": 1,
+      "list_shadow": 1,
+      "read_shadow": 1,
+      "check_ifconfig": 1,
+      "vpn_disconnect": 1,
+      "dnsteal_stop": 1
+    }
+  },
+  "elapsed_s": 19.6
+}
