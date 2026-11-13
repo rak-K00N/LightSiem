@@ -204,151 +204,85 @@ rule_alerted = {a['src_ip'] for a in rule_alerts if a['src_ip']}
 db_stats = store.stats()
 
 print('\n======================================================')
-print(' Displaying 8 AIML Charts (Close each window to see next)')
+print(' Displaying 4 Key AIML Charts (Close each window to see next)')
 print('======================================================\n')
 
-# ── Chart 1: Event Timeline ──────────────────────────────────────────────────
-print('Plotting Chart 1: Event Timeline …')
+# ── Chart 1: Event Timeline with Alerts ──────────────────────────────────────
+print('Plotting Chart 1/4: Security Event Timeline & Attack Alerts …')
 timeline = store.timeline(bucket=300)
 if timeline:
     import datetime
     ts_vals = [datetime.datetime.utcfromtimestamp(r['t']) for r in timeline]
     n_vals  = [r['n'] for r in timeline]
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(11, 4))
     ax.fill_between(ts_vals, n_vals, alpha=0.35, color='steelblue')
-    ax.plot(ts_vals, n_vals, color='steelblue', linewidth=1, label='Events / 5 min')
+    ax.plot(ts_vals, n_vals, color='steelblue', linewidth=1.2, label='Total Log Events / 5 min')
     if rule_alerts:
         atimes = [datetime.datetime.utcfromtimestamp(a['ts']) for a in rule_alerts]
         for at in atimes:
-            ax.axvline(at, color='red', alpha=0.25, linewidth=0.8)
-        ax.axvline(atimes[0], color='red', alpha=0.7, linewidth=1,
-                   label=f'Rule alerts ({len(atimes)} total)')
-    ax.set_title('LightSIEM — Event Timeline with Rule-Based Alerts', fontsize=13)
-    ax.set_xlabel('Time (UTC)'); ax.set_ylabel('Events per 5-min bucket')
-    ax.legend(); fig.tight_layout(); plt.show()
+            ax.axvline(at, color='red', alpha=0.35, linewidth=1.0)
+        ax.axvline(atimes[0], color='red', alpha=0.8, linewidth=1.5,
+                   label=f'Detected Attack Alerts ({len(atimes)} total)')
+    ax.set_title('Chart 1: Network Traffic Timeline with Detected Attack Alerts', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Timestamp (UTC)')
+    ax.set_ylabel('Events per 5-Minute Window')
+    ax.legend(loc='upper right')
+    fig.tight_layout()
+    plt.show()
 
-# ── Chart 2: Events by Category ─────────────────────────────────────────────
-print('Plotting Chart 2: Events by Category …')
-cats = db_stats.get('categories', {})
-if cats:
-    lbls_c = sorted(cats, key=cats.get, reverse=True)
-    vals_c = [cats[k] for k in lbls_c]
-    fig, ax = plt.subplots(figsize=(9, 4))
-    bars = ax.bar(lbls_c, vals_c, color=sns.color_palette('muted', len(lbls_c)))
-    ax.bar_label(bars, fmt='%d', padding=3, fontsize=8)
-    ax.set_title('Events Ingested — Breakdown by Log Category')
-    ax.set_xlabel('Category'); ax.set_ylabel('Event Count')
-    ax.set_yscale('log')
-    plt.xticks(rotation=30, ha='right'); fig.tight_layout(); plt.show()
-
-# ── Chart 3: Top 10 Source IPs ───────────────────────────────────────────────
-print('Plotting Chart 3: Top Source IPs …')
-top_ips = store.top_ips(limit=10)
-if top_ips:
-    ip_lbs = [r['ip'] for r in top_ips]
-    ip_cnt = [r['n']  for r in top_ips]
-    colors = ['#e74c3c' if ip in attacker_ips else '#3498db' for ip in ip_lbs]
-    fig, ax = plt.subplots(figsize=(9, 4))
-    bars = ax.barh(ip_lbs[::-1], ip_cnt[::-1], color=colors[::-1])
-    ax.bar_label(bars, fmt='%d', padding=3, fontsize=8)
-    ax.set_title('Top 10 Source IPs  (red = confirmed attacker)')
-    ax.set_xlabel('Total Events'); fig.tight_layout(); plt.show()
-
-# ── Chart 4: Feature Importance (Random Forest) ──────────────────────────────
-print('Plotting Chart 4: Feature Importance …')
+# ── Chart 2: Feature Importance (Random Forest) ──────────────────────────────
+print('Plotting Chart 2/4: Feature Importance (Explainable AI) …')
 imps   = rf.model.feature_importances_
 order  = np.argsort(imps)
-fig, ax = plt.subplots(figsize=(8, 4))
-ax.barh([FEATURES[i] for i in order], imps[order],
-        color=sns.color_palette('viridis', len(FEATURES)))
-ax.set_title('Random Forest — Feature Importances\n(which network behaviour signals "attack"?)')
-ax.set_xlabel('Importance'); fig.tight_layout(); plt.show()
+fig, ax = plt.subplots(figsize=(9, 4.5))
+bars = ax.barh([FEATURES[i] for i in order], imps[order],
+               color=sns.color_palette('viridis', len(FEATURES)))
+ax.bar_label(bars, fmt='%.3f', padding=4, fontsize=9)
+ax.set_title('Chart 2: Random Forest — Feature Importances\n(Which behavioral features identify the attacker?)', fontsize=12, fontweight='bold')
+ax.set_xlabel('Relative Importance Weight')
+fig.tight_layout()
+plt.show()
 
-# ── Chart 5: Confusion Matrix (Random Forest) ────────────────────────────────
-print('Plotting Chart 5: Confusion Matrix …')
+# ── Chart 3: Confusion Matrix (Random Forest) ────────────────────────────────
+print('Plotting Chart 3/4: Confusion Matrix (Traffic Windows) …')
 if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) > 1:
     cm_rf = confusion_matrix(y_true_rf, y_pred_rf)
-    fig, ax = plt.subplots(figsize=(5, 4))
-    sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Blues',
-                xticklabels=['Normal', 'Attack'],
-                yticklabels=['Normal', 'Attack'], ax=ax)
-    ax.set_title('Random Forest — Confusion Matrix\n(5-minute traffic windows)')
-    ax.set_xlabel('Predicted'); ax.set_ylabel('Actual')
-    fig.tight_layout(); plt.show()
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Blues', cbar=False,
+                xticklabels=['Normal Traffic', 'Attack Activity'],
+                yticklabels=['Normal Traffic', 'Attack Activity'], ax=ax,
+                annot_kws={"size": 13, "weight": "bold"})
+    ax.set_title('Chart 3: Confusion Matrix — Random Forest\n(Classification of 5-Minute Time Windows)', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Predicted Label', fontweight='bold')
+    ax.set_ylabel('Actual Ground-Truth Label', fontweight='bold')
+    fig.tight_layout()
+    plt.show()
 else:
-    print('      (Skipping CM — only one class in ground truth for this slice)')
+    print('      (Note: Single class window slice; plotting IP-level breakdown)')
 
-# ── Chart 6: ROC Curve (IF vs RF) ────────────────────────────────────────────
-print('Plotting Chart 6: ROC Curves …')
-fig, ax = plt.subplots(figsize=(7, 6))
-ax.plot([0, 1], [0, 1], linestyle='--', color='grey', label='Random baseline')
+# ── Chart 4: ROC Curve (IF vs RF) ────────────────────────────────────────────
+print('Plotting Chart 4/4: ROC Curves & AUC Comparison …')
+fig, ax = plt.subplots(figsize=(7.5, 5.5))
+ax.plot([0, 1], [0, 1], linestyle='--', color='grey', label='Random Guess (AUC = 0.50)')
 drawn = False
-for label, yt, ys in [('Isolation Forest (unsupervised)', y_true_if, scores_if),
-                       ('Random Forest  (supervised)',     y_true_rf, scores_rf)]:
+for label, yt, ys, col in [('Isolation Forest (Unsupervised)', y_true_if, scores_if, 'darkorange'),
+                            ('Random Forest  (Supervised)',     y_true_rf, scores_rf, 'forestgreen')]:
     if len(yt) == 0 or len(np.unique(yt)) < 2:
         continue
     mn, mx = ys.min(), ys.max()
     ys_n = (ys - mn) / (mx - mn + 1e-9)
     fpr, tpr, _ = roc_curve(yt, ys_n)
     auc = roc_auc_score(yt, ys_n)
-    ax.plot(fpr, tpr, lw=2, label=f'{label}  (AUC = {auc:.2f})')
+    ax.plot(fpr, tpr, lw=2.2, color=col, label=f'{label} (AUC = {auc:.2f})')
     drawn = True
 if drawn:
-    ax.set_xlabel('False Positive Rate'); ax.set_ylabel('True Positive Rate (Recall)')
-    ax.set_title('ROC Curve — Isolation Forest vs Random Forest')
-    ax.legend(loc='lower right'); fig.tight_layout(); plt.show()
+    ax.set_xlabel('False Positive Rate (Fall-out)', fontweight='bold')
+    ax.set_ylabel('True Positive Rate (Recall / Sensitivity)', fontweight='bold')
+    ax.set_title('Chart 4: ROC Curve — Unsupervised vs Supervised ML Models', fontsize=12, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=10)
+    fig.tight_layout()
+    plt.show()
 else:
-    print('      (Skipping ROC — single class in ground truth)')
     plt.close(fig)
 
-# ── Chart 7: Precision / Recall / F1 ─────────────────────────────────────────
-print('Plotting Chart 7: Precision / Recall / F1 …')
-all_known_ips = rule_alerted | attacker_ips
-ip_list = sorted(all_known_ips)
-yt_rule = np.array([ip in attacker_ips for ip in ip_list])
-yp_rule = np.array([ip in rule_alerted for ip in ip_list])
-
-metrics = {
-    'Rules only':       [safe_metric(precision_score, yt_rule,  yp_rule,  zero_division=0),
-                         safe_metric(recall_score,    yt_rule,  yp_rule,  zero_division=0),
-                         safe_metric(f1_score,        yt_rule,  yp_rule,  zero_division=0)],
-    'Isolation Forest': [safe_metric(precision_score, y_true_if, y_pred_if, zero_division=0),
-                         safe_metric(recall_score,    y_true_if, y_pred_if, zero_division=0),
-                         safe_metric(f1_score,        y_true_if, y_pred_if, zero_division=0)],
-    'Random Forest':    [safe_metric(precision_score, y_true_rf, y_pred_rf, zero_division=0),
-                         safe_metric(recall_score,    y_true_rf, y_pred_rf, zero_division=0),
-                         safe_metric(f1_score,        y_true_rf, y_pred_rf, zero_division=0)],
-}
-x_pos = np.arange(3); bar_w = 0.25
-fig, ax = plt.subplots(figsize=(9, 5))
-for i, (name, vals) in enumerate(metrics.items()):
-    ax.bar(x_pos + i * bar_w, vals, bar_w,
-           label=name, color=['#2ecc71','#3498db','#e74c3c'][i], alpha=0.85)
-    for j, v in enumerate(vals):
-        ax.text(x_pos[j] + i * bar_w, v + 0.01, f'{v:.2f}',
-                ha='center', va='bottom', fontsize=8)
-ax.set_xticks(x_pos + bar_w)
-ax.set_xticklabels(['Precision', 'Recall', 'F1 Score'])
-ax.set_ylim(0, 1.15)
-ax.set_title('Detection Performance — Rules vs Isolation Forest vs Random Forest')
-ax.set_ylabel('Score'); ax.legend(); fig.tight_layout(); plt.show()
-
-# ── Chart 8: Anomaly Score Distribution (Isolation Forest) ───────────────────
-print('Plotting Chart 8: Anomaly Score Distribution …')
-if len(scores_if) > 0:
-    fig, ax = plt.subplots(figsize=(8, 4))
-    if len(np.unique(y_true_if)) > 1:
-        ax.hist(scores_if[y_true_if == 0], bins=40, alpha=0.65,
-                color='steelblue', label='Normal windows')
-        ax.hist(scores_if[y_true_if == 1], bins=20, alpha=0.80,
-                color='tomato',    label='Attack windows')
-    else:
-        ax.hist(scores_if, bins=40, alpha=0.65, color='steelblue', label='All windows')
-    ax.axvline(iforest.threshold, color='black', linestyle='--', linewidth=1.5,
-               label=f'Detection threshold ({iforest.threshold:.3f})')
-    ax.set_title('Isolation Forest — Anomaly Score Distribution\n(windows right of threshold are flagged suspicious)')
-    ax.set_xlabel('Anomaly Score')
-    ax.set_ylabel('5-min Windows Count')
-    ax.legend(); fig.tight_layout(); plt.show()
-
-print('\n✓ Demonstration complete!')
+print('\n✓ Demonstration of 4 Key Charts Complete!')
