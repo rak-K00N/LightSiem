@@ -138,15 +138,15 @@ def make_image(rId, cx_emu, cy_emu, doc_id, name, descr):
 
 
 def build_version3_elements():
-    """Build all XML paragraph elements for Version 3 (Russell Mitchell Evaluation)."""
+    """Build all XML paragraph elements for Russell Mitchell Evaluation."""
     elements = []
 
     # Section Heading
-    elements.append(make_heading("Real-World Evaluation on Russell Mitchell Cyber-Attack Dataset (Version 3)", level=2))
+    elements.append(make_heading("Real-World Evaluation on Russell Mitchell Cyber-Attack Dataset", level=2))
 
     # Paragraph 1: Context & Ingestion
     elements.append(make_body_p(
-        "To evaluate LightSIEM beyond controlled synthetic environments, Version 3 of the system was tested "
+        "To evaluate LightSIEM beyond controlled synthetic environments, the system was tested "
         "against the Russell Mitchell cyber-attack dataset published by the Austrian Institute of Technology (AIT) "
         "under the AECID security research project. This benchmark provides realistic, multi-host network and system "
         "logs from an enterprise environment undergoing active exploitation. We ingested logs from the intranet_server "
@@ -244,7 +244,7 @@ def update_document_xml(xml_bytes):
     root = ET.fromstring(xml_bytes)
     body = root.find(f'{W}body')
 
-    # 1. Update Abstract to mention Version 3 Russell Mitchell evaluation
+    # 1. Update Abstract to mention Russell Mitchell evaluation
     for child in body:
         pPr = child.find(f'{W}pPr')
         if pPr is not None:
@@ -254,7 +254,7 @@ def update_document_xml(xml_bytes):
                 if t is not None:
                     orig = t.text
                     v3_summary = (
-                        " Furthermore, in Version 3, we validate LightSIEM on the real-world Russell Mitchell "
+                        " Furthermore, we validate LightSIEM on the real-world Russell Mitchell "
                         "cyber-attack dataset (AECID/AIT, 12,672 events); the pipeline achieved 100% parse coverage, "
                         "identified the attacker IP with 1.00 precision and recall, and the Random Forest detector "
                         "achieved an ROC AUC of 0.77 with zero false alarms."
@@ -274,7 +274,7 @@ def update_document_xml(xml_bytes):
                 t.text = (
                     "The rest of the paper reviews recent literature (Section II), describes the system (Section III) "
                     "and the experimental setup (Section IV), reports results on synthetic data and real-world "
-                    "evaluation on the Russell Mitchell dataset in Version 3 (Section V), describes industry offerings "
+                    "evaluation on the Russell Mitchell dataset (Section V), describes industry offerings "
                     "(Section VI) and concludes (Section VII)."
                 )
             break
@@ -344,7 +344,7 @@ def update_document_xml(xml_bytes):
                 if 'First, all data are synthetic' in t.text:
                     t.text = t.text.replace(
                         'First, all data are synthetic and were produced by the same authors who wrote the rules, so accuracy on real logs will be lower.',
-                        'First, while initial experiments relied on synthetic data, the Version 3 evaluation on the Russell Mitchell dataset validated detection in an authentic enterprise environment; ongoing work includes further benchmarks across diverse network protocols.'
+                        'First, while initial experiments relied on synthetic data, the evaluation on the Russell Mitchell dataset validated detection in an authentic enterprise environment; ongoing work includes further benchmarks across diverse network protocols.'
                     )
             break
 
