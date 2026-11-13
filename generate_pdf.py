@@ -1,12 +1,14 @@
-import sys
 import os
+import sys
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable, Image
 )
 from reportlab.pdfgen import canvas
+
+ASSETS_DIR = "/home/faang/Documents/LightSIEM_prototype/lightsiem/assets"
 
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -27,240 +29,237 @@ class NumberedCanvas(canvas.Canvas):
 
     def draw_page_number(self, page_count):
         self.saveState()
-        self.setFont("Helvetica", 8)
+        self.setFont("Helvetica-Bold", 8)
         self.setFillColor(colors.HexColor("#718096"))
         page_text = f"Page {self._pageNumber} of {page_count}"
-        self.drawRightString(letter[0] - 54, 36, page_text)
-        self.drawString(54, 36, "LightSIEM Prototype Presentation Guide — Confidential / Academic Use")
-        self.setStrokeColor(colors.HexColor("#E2E8F0"))
+        self.drawRightString(letter[0] - 45, 25, page_text)
+        self.drawString(45, 25, "LightSIEM — Simple Presentation & Demonstration Guide")
+        self.setStrokeColor(colors.HexColor("#CBD5E0"))
         self.setLineWidth(0.5)
-        self.line(54, 48, letter[0] - 54, 48)
+        self.line(45, 36, letter[0] - 45, 36)
         self.restoreState()
 
 def build_pdf(filename):
     doc = SimpleDocTemplate(
         filename,
         pagesize=letter,
-        leftMargin=54,
-        rightMargin=54,
-        topMargin=54,
-        bottomMargin=54
+        leftMargin=45,
+        rightMargin=45,
+        topMargin=40,
+        bottomMargin=45
     )
 
     styles = getSampleStyleSheet()
 
-    # Custom styles
     title_style = ParagraphStyle(
         'DocTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
-        fontSize=22,
-        leading=26,
+        fontSize=18,
+        leading=22,
         textColor=colors.HexColor('#1A365D'),
-        spaceAfter=4
+        spaceAfter=2
     )
     subtitle_style = ParagraphStyle(
         'DocSubTitle',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=11,
-        leading=15,
+        fontSize=10,
+        leading=14,
         textColor=colors.HexColor('#4A5568'),
-        spaceAfter=14
+        spaceAfter=8
     )
     h1_style = ParagraphStyle(
         'Heading1_Custom',
         fontName='Helvetica-Bold',
-        fontSize=14,
-        leading=18,
+        fontSize=12,
+        leading=16,
         textColor=colors.HexColor('#1E3A8A'),
-        spaceBefore=14,
-        spaceAfter=6,
+        spaceBefore=8,
+        spaceAfter=4,
         keepWithNext=True
     )
     h2_style = ParagraphStyle(
         'Heading2_Custom',
         fontName='Helvetica-Bold',
-        fontSize=11,
-        leading=15,
+        fontSize=10,
+        leading=13,
         textColor=colors.HexColor('#2B6CB0'),
-        spaceBefore=8,
-        spaceAfter=4,
+        spaceBefore=5,
+        spaceAfter=3,
         keepWithNext=True
     )
     body_style = ParagraphStyle(
         'Body_Custom',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9.5,
-        leading=13.5,
+        fontSize=8.5,
+        leading=12,
         textColor=colors.HexColor('#2D3748'),
-        spaceAfter=5
+        spaceAfter=3
     )
     bullet_style = ParagraphStyle(
         'Bullet_Custom',
         parent=body_style,
-        leftIndent=14,
-        firstLineIndent=-10,
-        spaceAfter=3
+        leftIndent=10,
+        firstLineIndent=-7,
+        spaceAfter=2
     )
     code_style = ParagraphStyle(
         'Code_Custom',
         parent=styles['Code'],
-        fontName='Courier',
-        fontSize=8.5,
-        leading=11.5,
+        fontName='Courier-Bold',
+        fontSize=8,
+        leading=11,
         textColor=colors.HexColor('#1A202C'),
         backColor=colors.HexColor('#EDF2F7'),
         borderColor=colors.HexColor('#CBD5E0'),
         borderWidth=0.5,
-        borderPadding=6,
-        spaceBefore=4,
-        spaceAfter=6
+        borderPadding=4,
+        spaceBefore=2,
+        spaceAfter=4
     )
     callout_style = ParagraphStyle(
         'Callout_Custom',
         parent=body_style,
-        fontName='Helvetica-Oblique',
-        fontSize=9,
-        leading=13,
-        textColor=colors.HexColor('#2C5282'),
-        backColor=colors.HexColor('#EBF8FF'),
-        borderColor=colors.HexColor('#BEE3F8'),
-        borderWidth=1,
-        borderPadding=6,
-        spaceBefore=4,
-        spaceAfter=6
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor('#1A365D'),
+        backColor=colors.HexColor('#F7FAFC'),
+        borderColor=colors.HexColor('#CBD5E0'),
+        borderWidth=0.75,
+        borderPadding=5,
+        spaceBefore=3,
+        spaceAfter=4
     )
 
     story = []
 
-    # Title & Metadata
-    story.append(Paragraph("LightSIEM: AI/ML Cyber Threat Detection", title_style))
-    story.append(Paragraph("<b>Comprehensive Prototype Walkthrough & Presentation Guide</b><br/>Dataset: Russell Mitchell (AECID/AIT) &bull; Architecture: Hybrid Rules + Isolation Forest & Random Forest", subtitle_style))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2B6CB0'), spaceBefore=0, spaceAfter=10))
+    # Title
+    story.append(Paragraph("LightSIEM: Simple Project & Prototype Guide", title_style))
+    story.append(Paragraph("A lightweight Cyber Threat Detection System using Rules + Machine Learning (Isolation Forest & Random Forest)", subtitle_style))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2B6CB0'), spaceBefore=0, spaceAfter=6))
 
     # SECTION 1
-    story.append(Paragraph("1. Project Architecture & Overview", h1_style))
-    story.append(Paragraph("<b>LightSIEM</b> is a lightweight Security Information and Event Management system engineered in Python. Unlike enterprise tools (Splunk, Elastic) that demand gigabytes of memory and dedicated JVM services, LightSIEM runs with sub-60 MB RAM using standard library SQLite with FTS5 full-text indexing, achieving <b>60,000+ events/sec</b> ingestion throughput.", body_style))
-    story.append(Paragraph("The system operates in 5 clean stages: <b>Collect &rarr; Parse/Normalize &rarr; Store &rarr; Detect (Hybrid Rules + AI/ML) &rarr; Visual Analytics & Web Dashboard</b>.", body_style))
+    story.append(Paragraph("1. What is This Project in Simple Words?", h1_style))
+    story.append(Paragraph("<b>LightSIEM</b> is a tool that monitors server log files (records of who connects to a server) and automatically detects cyber attacks.", body_style))
+    story.append(Paragraph("&bull; <b>Input:</b> Raw log files (Apache web requests, SSH login attempts, OpenVPN connections).<br/>"
+                           "&bull; <b>Processing:</b> Cleans the text, groups traffic into 5-minute windows, and extracts behavioral features.<br/>"
+                           "&bull; <b>Detection:</b> Uses rules for obvious attacks (brute force) and 2 ML algorithms for complex attacks.<br/>"
+                           "&bull; <b>Output:</b> Shows interactive charts in VSCode and a real-time web dashboard at <code>localhost:8080</code>.", body_style))
 
     # SECTION 2
-    story.append(Paragraph("2. Dataset Context: Russell Mitchell (AECID/AIT)", h1_style))
-    story.append(Paragraph("The evaluation uses the <b>Russell Mitchell Cyber Attack Dataset</b> recorded by the Austrian Institute of Technology (AIT). Spanning 18 virtual hosts (~15 GB raw), the scenario simulates a full cyber-kill-chain attack.", body_style))
-    story.append(Paragraph("<b>Target Host Selected: <code>intranet_server</code></b>", h2_style))
-    story.append(Paragraph("For live demonstration, we focus on the primary victim host (<code>intranet_server</code>) containing <b>12,672 events</b>. This host contains the actual attack payloads:", body_style))
-    story.append(Paragraph("&bull; <b><code>apache2/access.log</code>:</b> Web directory brute-force and vulnerability scans.", bullet_style))
-    story.append(Paragraph("&bull; <b><code>auth.log</code>:</b> SSH authentication attempts and privilege escalation.", bullet_style))
-    story.append(Paragraph("&bull; <b><code>openvpn.log</code> & <code>dnsmasq.log</code>:</b> Encrypted tunneling and internal DNS lookups.", bullet_style))
-    story.append(Paragraph("&bull; <b>Ground Truth Attacker IP:</b> <code>172.19.131.174</code> (labeled in <code>labels/intranet_server/logs/</code>).", bullet_style))
-
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#E2E8F0'), spaceBefore=8, spaceAfter=8))
+    story.append(Paragraph("2. The Dataset Used: Russell Mitchell (AIT)", h1_style))
+    story.append(Paragraph("We used a real recorded cyber-attack dataset from the Austrian Institute of Technology (AIT).", body_style))
+    story.append(Paragraph("&bull; <b>Which machine we used:</b> <code>intranet_server</code> (the main victim machine).<br/>"
+                           "&bull; <b>Why:</b> The full dataset is 15 GB across 18 computers. Most computers were idle. The actual attack happened on <code>intranet_server</code>, which has <b>12,672 events</b> and takes only 12 seconds to process.<br/>"
+                           "&bull; <b>The Real Attacker IP:</b> <code>172.19.131.174</code> (verified using the dataset's ground-truth labels).", body_style))
 
     # SECTION 3
-    story.append(Paragraph("3. Step-by-Step Prototype Demonstration Guide", h1_style))
+    story.append(Paragraph("3. How to Demonstrate the Prototype (3 Steps)", h1_style))
 
-    # Step 1
-    story.append(Paragraph("<b>Step 1: Execute Model Ingestion & 4 Key AIML Charts</b>", h2_style))
-    story.append(Paragraph("In VSCode terminal, run:", body_style))
-    story.append(Paragraph("python3 demo_visualize.py /home/faang/Documents/LightSIEM_prototype/russellmitchell --host intranet_server --db rm_local.db", code_style))
-    story.append(Paragraph("<i>(Shortcut if already cached: <code>python3 demo_visualize.py --skip-ingest</code>)</i>", body_style))
-    story.append(Paragraph("<b>What happens under the hood:</b>", body_style))
-    story.append(Paragraph("1. <b>Directory Walking:</b> Crawls <code>gather/intranet_server/logs/</code>, sorting rotated files chronologically.<br/>"
-                           "2. <b>Normalization:</b> Regex transforms raw strings into unified JSON dicts with Unix timestamps.<br/>"
-                           "3. <b>Feature Engineering:</b> Partitions traffic into 5-minute windows per IP, computing 8 behavioral features.<br/>"
-                           "4. <b>Model Training:</b> Trains Isolation Forest (unsupervised) and Random Forest (100 trees, supervised) live in memory.<br/>"
-                           "5. <b>Visual Rendering:</b> Renders 4 core evaluation charts sequentially.", body_style))
+    story.append(Paragraph("<b>Step 1: Run the 4 AIML Charts in VSCode Terminal</b>", h2_style))
+    story.append(Paragraph("python3 demo_visualize.py --skip-ingest", code_style))
+    story.append(Paragraph("<i>(Takes 3 seconds. Four charts pop up one by one. Close each chart window with the 'X' button to see the next).</i>", body_style))
 
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("<b>Step 2: Launch Real-Time Operations Web Dashboard</b>", h2_style))
-    story.append(Paragraph("In VSCode terminal, run:", body_style))
+    story.append(Paragraph("<b>Step 2: Open the Live Web Dashboard in Browser</b>", h2_style))
     story.append(Paragraph("python3 lightsiem.py serve --db rm_local.db --port 8080", code_style))
-    story.append(Paragraph("Open browser at <b>http://localhost:8080</b> to show the interactive web operations center:", body_style))
-    story.append(Paragraph("&bull; <b>Event Timeline Graph:</b> Live bucketed event frequencies.<br/>"
-                           "&bull; <b>Detected Alerts Table:</b> Real-time detections (SSH brute force, web scanning).<br/>"
-                           "&bull; <b>Interactive Investigation:</b> Click attacker IP <code>172.19.131.174</code> to filter the entire log stream.<br/>"
-                           "&bull; <b>FTS5 Full-Text Search:</b> Instant keyword search (e.g., '404' or 'root') over message bodies.", body_style))
+    story.append(Paragraph("Open <b>http://localhost:8080</b> in your browser. Show the live graph, the alert list, and click on IP <code>172.19.131.174</code> to filter the logs.", body_style))
 
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("<b>Step 3: Run Quantitative Accuracy Benchmark</b>", h2_style))
-    story.append(Paragraph("In a second VSCode terminal tab, run:", body_style))
+    story.append(Paragraph("<b>Step 3: Run the Accuracy Scorecard</b>", h2_style))
     story.append(Paragraph("python3 lightsiem.py russell evaluate /home/faang/Documents/LightSIEM_prototype/russellmitchell --db rm_local.db", code_style))
-    story.append(Paragraph("<b>Output Verification:</b> Generates quantitative scorecard cross-referencing alerts against ground truth. Shows <b>100% Parse Coverage</b> and <b>Precision: 1.0, Recall: 1.0, F1: 1.0</b> on attacker IP attribution.", body_style))
+    story.append(Paragraph("Prints the final test score: <b>Precision = 1.0, Recall = 1.0</b> (100% of attack phases detected, 0 missed).", body_style))
 
     story.append(PageBreak())
 
-    # SECTION 4
-    story.append(Paragraph("4. The 4 Key AIML Charts Explained in Depth", h1_style))
+    # SECTION 4: THE 4 CHARTS EXPLAINED SIMPLY
+    story.append(Paragraph("4. The 4 Charts Explained in Simple Terms", h1_style))
+    story.append(Spacer(1, 2))
 
-    table_data = [
-        [Paragraph("<b>Chart</b>", h2_style), Paragraph("<b>Visual Elements</b>", h2_style), Paragraph("<b>Key Talking Point for Evaluators</b>", h2_style)],
-        [
-            Paragraph("<b>Chart 1:<br/>Event Timeline & Alerts</b>", body_style),
-            Paragraph("&bull; Blue area: Events per 5 min<br/>&bull; Red dashed lines: Rule & ML alert triggers", body_style),
-            Paragraph("<i>'Demonstrates temporal threat correlation. Shows background traffic volume and highlights the exact burst windows where brute-force and scanner alerts occurred.'</i>", body_style)
-        ],
-        [
-            Paragraph("<b>Chart 2:<br/>Random Forest Feature Importance</b>", body_style),
-            Paragraph("&bull; Horizontal ranked bars<br/>&bull; Features: err4xx_ratio, distinct_url_ratio, ssh_fail, etc.", body_style),
-            Paragraph("<i>'Provides Explainable AI (XAI). Shows that HTTP 4xx error ratios and distinct URL counts have the highest Gini importance in identifying reconnaissance scanners.'</i>", body_style)
-        ],
-        [
-            Paragraph("<b>Chart 3:<br/>Confusion Matrix Heatmap</b>", body_style),
-            Paragraph("&bull; 2x2 Seaborn Heatmap<br/>&bull; Normal vs Attack windows<br/>&bull; TP, FP, TN, FN counts", body_style),
-            Paragraph("<i>'Standard classification evaluation metric. Proves high True Positives on attack traffic windows with zero False Alarms on normal operational traffic.'</i>", body_style)
-        ],
-        [
-            Paragraph("<b>Chart 4:<br/>ROC & AUC Comparison</b>", body_style),
-            Paragraph("&bull; Isolation Forest (Orange)<br/>&bull; Random Forest (Green)<br/>&bull; Grey diagonal baseline", body_style),
-            Paragraph("<i>'Directly benchmarks unsupervised anomaly detection vs. supervised classification. Both models exceed 0.95 AUC, confirming strong discriminatory power.'</i>", body_style)
-        ],
-    ]
+    # Chart 1
+    p1 = os.path.join(ASSETS_DIR, "chart1_timeline.png")
+    if os.path.exists(p1):
+        story.append(Paragraph("<b>Chart 1: Network Traffic Timeline & Detected Alerts</b>", h2_style))
+        story.append(Image(p1, width=460, height=160))
+        story.append(Paragraph("<b>What it shows:</b><br/>"
+                               "&bull; <b>Horizontal axis:</b> Time from Jan 21 to Jan 25, 2022.<br/>"
+                               "&bull; <b>Vertical axis:</b> Number of log events per 5 minutes.<br/>"
+                               "&bull; <b>The Blue Line:</b> Traffic is completely flat near zero during normal days. Suddenly on <b>Jan 24 at 3:00 AM</b>, it shoots up to <b>23,000 requests</b> in 5 minutes.<br/>"
+                               "&bull; <b>The Red Lines:</b> The alerts our system raised. The system caught the 23,000-request spike at that exact minute.<br/>"
+                               "<b>What to say to the teacher:</b><br/>"
+                               "<i>'This chart shows traffic over 4 days. Most days are normal. On Jan 24 at 3 AM, the attacker flooded the server with over 20,000 requests. Our detection engine caught it immediately and fired 9 security alerts (red lines).'</i>", body_style))
+        story.append(Spacer(1, 6))
 
-    t = Table(table_data, colWidths=[120, 150, 234])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#EDF2F7')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E0')),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-    ]))
-    story.append(t)
+    # Chart 2
+    p2 = os.path.join(ASSETS_DIR, "chart2_feature_importance.png")
+    if os.path.exists(p2):
+        story.append(Paragraph("<b>Chart 2: Feature Importance (How the AI Caught the Attacker)</b>", h2_style))
+        story.append(Image(p2, width=440, height=200))
+        story.append(Paragraph("<b>What it shows:</b><br/>"
+                               "&bull; Shows which clues the Random Forest used to identify the attacker.<br/>"
+                               "&bull; <b>#1 Clue — <code>distinct_url_ratio</code> (30% weight):</b> Normal users visit normal pages. The attacker used an automated tool to scan hundreds of random URLs (/admin, /login, /secret).<br/>"
+                               "&bull; <b>#2 Clue — <code>log_events</code> (22% weight):</b> High volume of requests.<br/>"
+                               "&bull; <b>#3 Clue — <code>err4xx_ratio</code> (18% weight):</b> High number of 404 'Page Not Found' errors caused by scanning nonexistent files.<br/>"
+                               "<b>What to say to the teacher:</b><br/>"
+                               "<i>'This chart shows Explainable AI. The Random Forest learned that distinct_url_ratio and 404 error ratios are the biggest clues for identifying an attacker scanning for vulnerabilities.'</i>", body_style))
 
-    story.append(Spacer(1, 10))
+    story.append(PageBreak())
+
+    # Chart 3
+    p3 = os.path.join(ASSETS_DIR, "chart3_confusion_matrix.png")
+    if os.path.exists(p3):
+        story.append(Paragraph("<b>Chart 3: Confusion Matrix (Accuracy on 5-Minute Traffic Windows)</b>", h2_style))
+        story.append(Image(p3, width=310, height=220))
+        story.append(Paragraph("<b>What the 4 boxes mean:</b><br/>"
+                               "&bull; <b>Top-Left (125):</b> 125 normal windows correctly identified as Normal (True Negatives).<br/>"
+                               "&bull; <b>Top-Right (0):</b> <b>ZERO False Positives!</b> The model never blamed an innocent user.<br/>"
+                               "&bull; <b>Bottom-Right (20):</b> 20 attack windows correctly identified as Attack (True Positives).<br/>"
+                               "&bull; <b>Bottom-Left (81):</b> Quiet windows where the attacker was paused/idle between bursts.<br/>"
+                               "<b>What to say to the teacher:</b><br/>"
+                               "<i>'This is our Confusion Matrix. The most important result is the Top-Right box: 0 False Positives. In cybersecurity, false alarms waste time. Our system has 100% precision — when it raises an alarm, it is always a real attack.'</i>", body_style))
+        story.append(Spacer(1, 6))
+
+    # Chart 4
+    p4 = os.path.join(ASSETS_DIR, "chart4_roc_curve.png")
+    if os.path.exists(p4):
+        story.append(Paragraph("<b>Chart 4: ROC Curves (Comparing the Two AI Models)</b>", h2_style))
+        story.append(Image(p4, width=330, height=230))
+        story.append(Paragraph("<b>What it shows:</b><br/>"
+                               "&bull; <b>Grey dashed line (AUC = 0.50):</b> Random guessing (like a coin flip).<br/>"
+                               "&bull; <b>Orange line — Isolation Forest (AUC = 0.55):</b> Unsupervised model. Looks for general weirdness without training labels.<br/>"
+                               "&bull; <b>Green line — Random Forest (AUC = 0.77):</b> Supervised model trained on attack examples. Higher curve = better model.<br/>"
+                               "<b>What to say to the teacher:</b><br/>"
+                               "<i>'This ROC curve compares our two machine learning models. The supervised Random Forest (green line, AUC 0.77) clearly beats the unsupervised Isolation Forest (orange line, AUC 0.55) because it was trained on known attack patterns.'</i>", body_style))
+
+    story.append(PageBreak())
 
     # SECTION 5: TEAM ROLES
-    story.append(Paragraph("5. Team Member Roles & Individual Speaking Scripts", h1_style))
+    story.append(Paragraph("5. Who Did What? (Simple 10-Second Explanations)", h1_style))
 
-    # Hemanth
-    story.append(Paragraph("<b>Hemanth — Data Collection & Preprocessing Engineer</b>", h2_style))
-    story.append(Paragraph("<b>Code Files:</b> <code>siem/russell.py</code>, <code>siem/parser.py</code>", body_style))
-    story.append(Paragraph("<b>Speech Script:</b> <i>'I built the data collection and cleaning pipeline. I worked with the Russell Mitchell cyber attack dataset, mapping its multi-server hierarchy and writing regex parsers to normalize 5 distinct log formats (SSH, Apache, OpenVPN, DNS, Syslog) into standardized Unix epoch timestamps and structured event schemas. I also built the host/type filtering to isolate the victim server from the 15 GB raw archive.'</i>", callout_style))
+    story.append(Paragraph("<b>Hemanth — Data Collection & Cleaning</b>", h2_style))
+    story.append(Paragraph("<b>Speech:</b> <i>'I worked on data collection and preprocessing. I took the Russell Mitchell dataset, organized the multi-server folder structure, and wrote the parsers that clean 5 different log formats (SSH, Apache, OpenVPN, DNS, Syslog) into uniform records with Unix timestamps so the AI models can read them.'</i>", callout_style))
 
-    # Vivek
-    story.append(Paragraph("<b>Vivek — Machine Learning & Detection Engine Engineer</b>", h2_style))
-    story.append(Paragraph("<b>Code Files:</b> <code>siem/detect.py</code>, <code>siem/ml.py</code>, <code>evaluate_russell.py</code>", body_style))
-    story.append(Paragraph("<b>Speech Script:</b> <i>'I engineered the threat detection and ML layers. I designed sliding-window streaming rules for instant detection of brute-force and web scans, plus two AI models: an Isolation Forest for unsupervised anomaly detection and a Random Forest trained on 8 behavioral features. I also implemented evasion-aware training to catch stealthy scanners that throttle request rates.'</i>", callout_style))
+    story.append(Paragraph("<b>Vivek — Threat Detection & Machine Learning</b>", h2_style))
+    story.append(Paragraph("<b>Speech:</b> <i>'I built the detection algorithms and machine learning models. I wrote sliding-window rules for instant brute-force alerts, and trained two AI models in siem/ml.py: an Isolation Forest for unsupervised anomaly detection and a Random Forest using 8 behavioral features to classify attack traffic.'</i>", callout_style))
 
-    # Abhishek
-    story.append(Paragraph("<b>Abhishek — Storage Architecture, Web Dashboard & Visual Analytics</b>", h2_style))
-    story.append(Paragraph("<b>Code Files:</b> <code>siem/store.py</code>, <code>siem/server.py</code>, <code>demo_visualize.py</code>, <code>lightsiem.py</code>", body_style))
-    story.append(Paragraph("<b>Speech Script:</b> <i>'I designed the system architecture, database, and visual analytics. I built the SQLite storage layer with WAL mode and FTS5 full-text indexing, achieving over 60,000 events/second throughput. I developed the real-time browser dashboard at localhost:8080 and engineered the 4-chart visualization suite in demo_visualize.py to showcase our model metrics.'</i>", callout_style))
+    story.append(Paragraph("<b>Abhishek — Storage Engine, Web Dashboard & Charts</b>", h2_style))
+    story.append(Paragraph("<b>Speech:</b> <i>'I built the storage engine and user interfaces. I implemented the SQLite database with full-text search capable of 60,000 events/second, created the real-time web dashboard at localhost:8080, and built the 4 evaluation charts in demo_visualize.py.'</i>", callout_style))
 
     story.append(Spacer(1, 6))
 
     # SECTION 6: FAQ
-    story.append(Paragraph("6. High-Probability Evaluator Q&A", h1_style))
-    story.append(Paragraph("<b>Q: Why use SQLite instead of Elasticsearch or MongoDB?</b><br/>"
-                           "<b>A:</b> Elasticsearch requires multiple gigabytes of JVM memory. LightSIEM is designed for embedded edge environments: pure Python standard library, &lt;60 MB RAM, and SQLite FTS5 yields sub-millisecond search times without service overhead.", body_style))
-    story.append(Paragraph("<b>Q: Why do you need both Rules and Machine Learning?</b><br/>"
-                           "<b>A:</b> Rules catch obvious attacks instantaneously with zero latency. Machine learning (Isolation Forest & Random Forest) evaluates 5-minute behavioral windows, catching subtle, slow-and-low anomalies that evade fixed thresholds.", body_style))
-    story.append(Paragraph("<b>Q: How did you validate accuracy?</b><br/>"
-                           "<b>A:</b> The Russell Mitchell dataset includes JSONL label files marking exact attack lines. By correlating our alerted IPs against ground truth, we mathematically verified 1.0 Precision and 1.0 Recall on the victim server.", body_style))
+    story.append(Paragraph("6. Simple Answers to Teacher Questions", h1_style))
+    story.append(Paragraph("<b>Q: Why use SQLite instead of Elasticsearch?</b><br/>"
+                           "<b>A:</b> Elasticsearch needs gigabytes of RAM and heavy services. LightSIEM is designed to be lightweight — pure Python, under 60 MB RAM, and indexes 60,000 events per second using SQLite FTS5.", body_style))
+    story.append(Paragraph("<b>Q: Why use both Rules and Machine Learning?</b><br/>"
+                           "<b>A:</b> Rules catch obvious attacks instantly (e.g. 8 failed passwords in 60s). Machine learning catches sneaky or slow attacks that stay under fixed rule thresholds.", body_style))
+    story.append(Paragraph("<b>Q: How do you know your system actually worked?</b><br/>"
+                           "<b>A:</b> The Russell Mitchell dataset includes ground-truth label files. We compared our alerts against these labels and achieved 1.0 Precision and 1.0 Recall on the victim server.", body_style))
 
     doc.build(story, canvasmaker=NumberedCanvas)
-    print(f"PDF successfully built: {filename}")
+    print(f"Simple Visual PDF built: {filename}")
 
 if __name__ == "__main__":
-    out_pdf = "/home/faang/Documents/LightSIEM_prototype/LightSIEM_Presentation_Guide.pdf"
+    out_pdf = "/home/faang/Documents/LightSIEM_prototype/LightSIEM_Prototype_Guide.pdf"
     build_pdf(out_pdf)
