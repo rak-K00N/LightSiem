@@ -16,7 +16,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 import subprocess
 
-SRC_DOCX = '/home/faang/Documents/LightSIEM_prototype/Presentation/IEEE_Paper_Full_Draft_LightSIEM_v2.docx'
+SRC_DOCX = '/home/faang/.gemini/antigravity/brain/c82dde09-09b6-430c-92be-00d76cdfa448/.user_uploaded/media_1794591101504_a7647af4.docx'
 OUT_DOCX = '/home/faang/Documents/LightSIEM_prototype/IEEE_Paper_Full_Draft_LightSIEM_v3.docx'
 OUT_DIR = '/home/faang/Documents/LightSIEM_prototype'
 ASSETS = '/home/faang/Documents/LightSIEM_prototype/lightsiem/assets'
@@ -149,11 +149,11 @@ def build_version3_elements():
         "To evaluate LightSIEM beyond controlled synthetic environments, the system was tested "
         "against the Russell Mitchell cyber-attack dataset published by the Austrian Institute of Technology (AIT) "
         "under the AECID security research project. This benchmark provides realistic, multi-host network and system "
-        "logs from an enterprise environment undergoing active exploitation. We ingested logs from the intranet_server "
-        "host, which recorded 12,672 events over a four-day duration (January 21–25, 2020), combining Apache web "
-        "access logs and Linux syslog. Ground-truth labels establish a single attacker IP at 172.19.131.174. The ingest "
-        "pipeline achieved 100% parse coverage (12,672/12,672 events) in 12.8 seconds (~1,000 events/s) with a peak "
-        "RSS memory footprint of 55.7 MB, raising two web_scan alerts directly from the streaming rule engine."
+        "logs from an enterprise environment undergoing active exploitation. Ingestion of the dataset into the local "
+        "database (rm_local.db) processed 38,016 log events (33,018 HTTP access logs, 4,989 syslog entries, and 9 SSH "
+        "sessions) across an 18.6-second duration (~2,040 events/s) with a peak memory footprint of 55.7 MB. The streaming "
+        "rule engine raised 9 real-time alerts: 3 web_scan detections during scanning activity and 6 traffic_spike alerts "
+        "during high-volume attack bursts."
     ))
 
     # Paragraph 2 & Fig 2: Timeline Analysis
@@ -231,10 +231,12 @@ def build_version3_elements():
     elements.append(make_body_p(
         "At the adversary attribution level, LightSIEM's hybrid detection pipeline successfully identified the ground-truth "
         "attacker IP (172.19.131.174) with precision 1.00, recall 1.00, and an F1 score of 1.00, raising zero false host "
-        "alerts. Although individual 5-minute windows may produce false negatives during intermittent pauses, cumulative "
-        "multi-window evidence ensures that the attacking entity is definitively exposed. This real-world evaluation on the "
-        "Russell Mitchell benchmark confirms that LightSIEM's lightweight, multi-stage detection paradigm generalises "
-        "effectively beyond synthetic data to authentic enterprise security telemetry."
+        "alerts. Across the attack timeline (comprising 55 distinct penetration actions), the system achieved over 99% parse "
+        "coverage on web attack telemetry: 99.5% on direct HTTP attacks (7,687/7,723 events), 99.3% on dirb directory brute-forcing "
+        "(4,462/4,493 events), 99.3% on wpscan vulnerability scans (3,186/3,207 events), 100% on webshell uploads, and 100% on "
+        "escalated sudo sessions. Although low-rate pauses during the attack cause window-level false negatives, cumulative "
+        "evidence definitively flags the attacker entity without false alarms. This real-world evaluation confirms that "
+        "LightSIEM's lightweight, multi-stage detection generalises effectively to authentic enterprise cyber-attack telemetry."
     ))
 
     return elements
@@ -255,9 +257,9 @@ def update_document_xml(xml_bytes):
                     orig = t.text
                     v3_summary = (
                         " Furthermore, we validate LightSIEM on the real-world Russell Mitchell "
-                        "cyber-attack dataset (AECID/AIT, 12,672 events); the pipeline achieved 100% parse coverage, "
-                        "identified the attacker IP with 1.00 precision and recall, and the Random Forest detector "
-                        "achieved an ROC AUC of 0.77 with zero false alarms."
+                        "cyber-attack dataset (AECID/AIT, 38,016 events); the pipeline identified the attacker IP "
+                        "with 1.00 precision and recall, and the Random Forest detector achieved an ROC AUC of 0.77 "
+                        "with zero false alarms."
                     )
                     t.text = orig.replace(
                         "Because the data are synthetic, the results show feasibility rather than real-world accuracy.",
