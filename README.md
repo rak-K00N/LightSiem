@@ -13,6 +13,74 @@ Detection combines a **streaming rule engine** (real-time sliding-window rules +
 
 ## Architecture & Pipeline
 
+```mermaid
+flowchart TD
+    subgraph S1["1. Telemetry & Log Ingestion"]
+        A1["Apache HTTP Access Logs"]
+        A2["Linux auth.log / SSHD"]
+        A3["System Logs / syslog"]
+        A4["Network Logs (VPN / DNS)"]
+        INGEST["Ingestion Engine (siem/ingest.py)<br/>• Multi-stream chronological heap merge (heapq.merge)<br/>• Batch file processing & live tail -f"]
+        A1 --> INGEST
+        A2 --> INGEST
+        A3 --> INGEST
+        A4 --> INGEST
+    end
+
+    subgraph S2["2. Log Parsing & Normalization"]
+        PARSE["Unified Parser (siem/parser.py)<br/>• Regex tokenizers & timestamp parsing<br/>• Common Event Schema (ts, host, category, severity, src_ip, user, status, msg)"]
+        INGEST --> PARSE
+    end
+
+    subgraph S3["3. Hybrid Threat Detection Engine"]
+        direction TB
+        subgraph S3A["Streaming Rule Engine (siem/detect.py)"]
+            R1["Sliding Window Correlation<br/>• ssh_bruteforce: >=8 fails / 60s<br/>• ssh_low_and_slow: >=40 fails / 1h<br/>• web_scan: >=25 401/403/404 / 60s<br/>• ssh_success_after_failures"]
+            R2["Adaptive EWMA Anomaly Detector<br/>• Dynamic baseline (mean + 4*std)<br/>• Traffic spike detection with anti-poisoning"]
+        end
+
+        subgraph S3B["Supervised Machine Learning Engine (siem/ml.py)"]
+            WIN["5-Minute Sliding Time Windows (per-IP aggregation)"]
+            FEAT["13 Behavioral Attack-Phase Features<br/>• distinct_path_depth (deep scanning)<br/>• post_ratio (webshell uploads)<br/>• request_rate (scanner velocity)<br/>• webshell_indicator (shell patterns)<br/>• consecutive_404_ratio, err4xx, etc."]
+            RF["Random Forest Classifier (100 Trees)<br/>• Evasion-aware augmented training<br/>• Evidence accumulation (P > 0.8 immediate / P > 0.3 persistent)<br/>• ROC AUC = 0.98, 0% False Alarms"]
+            WIN --> FEAT --> RF
+        end
+        PARSE --> R1
+        PARSE --> R2
+        PARSE --> WIN
+    end
+
+    subgraph S4["4. Embedded Storage & Search"]
+        STORE[("SQLite Storage & Indexing (siem/store.py)<br/>• WAL Mode, < 60 MB RAM footprint<br/>• B-Tree Indexes on ts and src_ip<br/>• FTS5 Full-Text Search Virtual Table")]
+        PARSE -->|"Store Normalized Events"| STORE
+        R1 -->|"Record Rule Alerts"| STORE
+        R2 -->|"Record Anomaly Alerts"| STORE
+        RF -->|"Record ML Threat Detections"| STORE
+    end
+
+    subgraph S5["5. Analytics & Visualization Layer"]
+        KBN["Kibana-Style Web UI (siem/server.py & static/)<br/>• Real-time traffic histogram with alert overlays<br/>• KQL query search bar & quick filters<br/>• Document inspector (Elastic ECS JSON modal)<br/>• XAI feature importance & attribution panel"]
+        VIZ["AIML Evaluation Suite (demo_visualize.py)<br/>• Timeline, Feature Importances, Confusion Matrix, ROC Curve"]
+        PAPER["Paper & Report Generator (generate_paper.py)<br/>• IEEE 2-column docx & PDF builder with embedded charts"]
+        STORE --> KBN
+        STORE --> VIZ
+        VIZ --> PAPER
+    end
+
+    classDef primary fill:#141a23,stroke:#1ba9f5,stroke-width:2px,color:#f0f4fa
+    classDef alert fill:#201015,stroke:#f95d54,stroke-width:2px,color:#fff
+    classDef success fill:#102218,stroke:#00bfb3,stroke-width:2px,color:#fff
+    classDef db fill:#1a202c,stroke:#fed658,stroke-width:2px,color:#fff
+
+    class INGEST,PARSE primary
+    class R1,R2 alert
+    class RF,FEAT success
+    class STORE db
+    class KBN,VIZ,PAPER primary
+```
+
+### Pipeline Summary Table
+
 | Pipeline Stage | Module / File | Responsibility |
 | :--- | :--- | :--- |
 | **Collect** | [`siem/ingest.py`](siem/ingest.py) | Merges multi-host log streams chronologically; supports batch ingestion and live `tail -f`. |
