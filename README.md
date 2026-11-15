@@ -15,34 +15,34 @@ Detection combines a **streaming rule engine** (real-time sliding-window rules +
 
 ```mermaid
 flowchart TD
-    subgraph S1["1. Telemetry & Log Ingestion"]
-        A1["Apache HTTP Access Logs"]
-        A2["Linux auth.log / SSHD"]
-        A3["System Logs / syslog"]
-        A4["Network Logs (VPN / DNS)"]
-        INGEST["Ingestion Engine (siem/ingest.py)<br/>• Multi-stream chronological heap merge (heapq.merge)<br/>• Batch file processing & live tail -f"]
+    subgraph S1["📥 1. Log Ingestion"]
+        A1["🌐 Apache Access Logs"]
+        A2["🔑 Linux auth.log (SSH)"]
+        A3["🖥️ System Logs (syslog)"]
+        A4["📡 Network Logs (VPN/DNS)"]
+        INGEST["⚡ Stream Ingestion Engine<br/><code>heapq.merge</code> chronological stream"]
         A1 --> INGEST
         A2 --> INGEST
         A3 --> INGEST
         A4 --> INGEST
     end
 
-    subgraph S2["2. Log Parsing & Normalization"]
-        PARSE["Unified Parser (siem/parser.py)<br/>• Regex tokenizers & timestamp parsing<br/>• Common Event Schema (ts, host, category, severity, src_ip, user, status, msg)"]
+    subgraph S2["⚙️ 2. Normalization"]
+        PARSE["🔄 Unified Parser<br/>Standard Common Event Schema"]
         INGEST --> PARSE
     end
 
-    subgraph S3["3. Hybrid Threat Detection Engine"]
+    subgraph S3["🛡️ 3. Hybrid Threat Detection Engine"]
         direction TB
-        subgraph S3A["Streaming Rule Engine (siem/detect.py)"]
-            R1["Sliding Window Correlation<br/>• ssh_bruteforce: >=8 fails / 60s<br/>• ssh_low_and_slow: >=40 fails / 1h<br/>• web_scan: >=25 401/403/404 / 60s<br/>• ssh_success_after_failures"]
-            R2["Adaptive EWMA Anomaly Detector<br/>• Dynamic baseline (mean + 4*std)<br/>• Traffic spike detection with anti-poisoning"]
+        subgraph S3A["⚡ Streaming Rule Engine"]
+            R1["⏱️ Sliding Window Rules<br/>Brute-Force & Web Scans"]
+            R2["📈 Adaptive EWMA Detector<br/>Traffic Spike Alerts"]
         end
 
-        subgraph S3B["Supervised Machine Learning Engine (siem/ml.py)"]
-            WIN["5-Minute Sliding Time Windows (per-IP aggregation)"]
-            FEAT["13 Behavioral Attack-Phase Features<br/>• distinct_path_depth (deep scanning)<br/>• post_ratio (webshell uploads)<br/>• request_rate (scanner velocity)<br/>• webshell_indicator (shell patterns)<br/>• consecutive_404_ratio, err4xx, etc."]
-            RF["Random Forest Classifier (100 Trees)<br/>• Evasion-aware augmented training<br/>• Evidence accumulation (P > 0.8 immediate / P > 0.3 persistent)<br/>• ROC AUC = 0.98, 0% False Alarms"]
+        subgraph S3B["🧠 Machine Learning Engine"]
+            WIN["⏳ 5-Min Time Windows"]
+            FEAT["🎯 13 Behavioral Features<br/>Path depth, POST ratio, rates"]
+            RF["🌲 Random Forest Classifier<br/><b>AUC = 0.98</b> • 0% False Alarms"]
             WIN --> FEAT --> RF
         end
         PARSE --> R1
@@ -50,21 +50,19 @@ flowchart TD
         PARSE --> WIN
     end
 
-    subgraph S4["4. Embedded Storage & Search"]
-        STORE[("SQLite Storage & Indexing (siem/store.py)<br/>• WAL Mode, < 60 MB RAM footprint<br/>• B-Tree Indexes on ts and src_ip<br/>• FTS5 Full-Text Search Virtual Table")]
-        PARSE -->|"Store Normalized Events"| STORE
-        R1 -->|"Record Rule Alerts"| STORE
-        R2 -->|"Record Anomaly Alerts"| STORE
-        RF -->|"Record ML Threat Detections"| STORE
+    subgraph S4["💾 4. Embedded Storage"]
+        STORE[("🗄️ SQLite + FTS5 Search<br/>WAL Mode • &lt; 60 MB RAM")]
+        PARSE -->|"Events"| STORE
+        R1 -->|"Alerts"| STORE
+        R2 -->|"Spikes"| STORE
+        RF -->|"Detections"| STORE
     end
 
-    subgraph S5["5. Analytics & Visualization Layer"]
-        KBN["Kibana-Style Web UI (siem/server.py & static/)<br/>• Real-time traffic histogram with alert overlays<br/>• KQL query search bar & quick filters<br/>• Document inspector (Elastic ECS JSON modal)<br/>• XAI feature importance & attribution panel"]
-        VIZ["AIML Evaluation Suite (demo_visualize.py)<br/>• Timeline, Feature Importances, Confusion Matrix, ROC Curve"]
-        PAPER["Paper & Report Generator (generate_paper.py)<br/>• IEEE 2-column docx & PDF builder with embedded charts"]
+    subgraph S5["📊 5. Analytics & Visualization"]
+        KBN["🖥️ Kibana-Style Web Dashboard<br/>Live Histogram, KQL Search, ECS Viewer"]
+        VIZ["📈 AIML Visualizer<br/>ROC Curves, Confusion Matrix, Feature Weights"]
         STORE --> KBN
         STORE --> VIZ
-        VIZ --> PAPER
     end
 
     classDef primary fill:#141a23,stroke:#1ba9f5,stroke-width:2px,color:#f0f4fa
@@ -76,7 +74,7 @@ flowchart TD
     class R1,R2 alert
     class RF,FEAT success
     class STORE db
-    class KBN,VIZ,PAPER primary
+    class KBN,VIZ primary
 ```
 
 ### Pipeline Summary Table
