@@ -7,12 +7,12 @@
   },
   "db": {
     "path": "rm_local.db",
-    "events": 38016,
-    "alerts": 9,
+    "events": 153174,
+    "alerts": 225,
     "categories": {
-      "http": 33018,
-      "other": 4989,
-      "ssh_ok": 9
+      "http": 107203,
+      "other": 45965,
+      "ssh_ok": 6
     }
   },
   "ingestion_coverage": {
@@ -149,8 +149,8 @@
     "f1": 1.0
   },
   "alerts_by_rule": {
-    "web_scan": 3,
-    "traffic_spike": 6
+    "traffic_spike": 224,
+    "web_scan": 1
   },
   "attack_phase_detection": {
     "foothold": "no parseable lines",
@@ -160,7 +160,7 @@
         1642996762,
         1642999086
       ],
-      "alerts_in_window": 6,
+      "alerts_in_window": 2,
       "detected": true,
       "alert_rules": [
         "traffic_spike",
@@ -231,5 +231,5 @@
       "dnsteal_stop": 1
     }
   },
-  "elapsed_s": 21.2
+  "elapsed_s": 25.7
 }

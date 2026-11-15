@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate IEEE Paper Version 3:
+Generate IEEE Paper:
 - Ingests 4 Russell Mitchell evaluation charts into word/media/
-- Removes old synthetic charts (fig2 and fig3) and adjust their references
+- Removes old synthetic charts and adjusts their references
 - Keeps system architecture diagram (Fig 1)
-- Inserts Section V-C: 'Real-World Evaluation on Russell Mitchell Cyber-Attack Dataset (Version 3)'
-  with the 4 charts and deep technical analysis
+- Inserts Section V-C: 'Real-World Evaluation on Russell Mitchell Cyber-Attack Dataset'
+  with the 4 charts and technical analysis
 - Updates Abstract, Section I roadmap, and Section V-E (Limitations)
 - Generates clean docx (preserving IEEE 2-column format) and exports to PDF
 """
@@ -315,7 +315,7 @@ def update_document_xml(xml_bytes):
                     )
             break
 
-    # 4. Find the insertion point for Version 3 section: right before Heading2: 'Performance'
+    # 4. Find the insertion point for Real-World evaluation section: right before Heading2: 'Performance'
     target_idx = -1
     for i, child in enumerate(body):
         texts = ''.join(child.itertext())
@@ -333,9 +333,9 @@ def update_document_xml(xml_bytes):
                 target_idx = i
                 break
 
-    print(f'Inserting Version 3 section before child index: {target_idx}')
-    v3_elements = build_version3_elements()
-    for el in reversed(v3_elements):
+    print(f'Inserting Real-World Evaluation section before child index: {target_idx}')
+    rm_elements = build_version3_elements()
+    for el in reversed(rm_elements):
         body.insert(target_idx, el)
 
     # 5. Update Limitations section
@@ -354,7 +354,7 @@ def update_document_xml(xml_bytes):
 
 
 def main():
-    print('Starting clean generation of IEEE Paper Version 3...')
+    print('Starting generation of IEEE Paper with Russell Mitchell Evaluation...')
 
     chart_files = {
         'word/media/chart1_timeline.png': os.path.join(ASSETS, 'chart1_timeline.png'),

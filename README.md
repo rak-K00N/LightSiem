@@ -1,147 +1,180 @@
-# LightSIEM - A Lightweight SIEM & AI/ML Log Analysis Tool
+# LightSIEM — Lightweight SIEM & AI/ML Log Analysis Platform
 
-Pipeline (same stages as an enterprise SIEM like Elastic/Splunk): **Collect -> Parse/Normalise -> Store + Search -> Detect (Rules + ML) -> Dashboard / Visual Analytics**.
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Database](https://img.shields.io/badge/Database-SQLite%20FTS5-green.svg)](https://www.sqlite.org/fts5.html)
+[![ML](https://img.shields.io/badge/ML-Random%20Forest%20(13%20Features)-orange.svg)](https://scikit-learn.org/)
+[![Benchmark](https://img.shields.io/badge/AUC-0.98%20(Russell%20Mitchell)-brightgreen.svg)](https://www.ait.ac.at/)
 
-The core pipeline (collect, parse, store, rules, web dashboard) is pure Python 3.9+ standard library with SQLite FTS5 (no JVM, no heavyweight external services).
-The AI/ML detection and visual demonstration components use `scikit-learn`, `numpy`, `matplotlib`, and `seaborn`.
+LightSIEM is a lightweight, edge-deployable Security Information and Event Management (SIEM) system. It replicates enterprise SIEM pipelines (**Collect $\rightarrow$ Parse $\rightarrow$ Store/Search $\rightarrow$ Detect $\rightarrow$ Visualize**) while maintaining a minimal resource footprint (<60 MB RAM).
 
-| Stage | File | What it does |
-|---|---|---|
-| Collect | `siem/ingest.py` | Reads files (merged chronologically) or follows a live file (`tail -f`) |
-| Parse | `siem/parser.py` | Syslog/sshd, Apache/Nginx, OpenVPN, and dnsmasq logs -> common event schema |
-| Store/Search | `siem/store.py` | SQLite database, indexes on time & IP, FTS5 full-text search index |
-| Detect | `siem/detect.py` | Streaming sliding-window rules + adaptive EWMA rate anomaly detector |
-| Dashboard | `siem/server.py`, `static/index.html` | Real-time web dashboard & JSON REST API |
-| ML Detector | `siem/ml.py` | Isolation Forest (unsupervised) and Random Forest (supervised) on 5-min IP windows |
-| Russell Mitchell | `siem/russell.py` | Multi-host parser & label loader for the AECID/AIT Cyber Attack Dataset |
-| AIML Visuals | `demo_visualize.py` | Interactive Matplotlib/Seaborn charts (Confusion Matrix, ROC, Feature Importance) |
-| Test Data | `siem/gen_logs.py` | Synthetic log generator with ground-truth attacker labels |
-| Evaluation | `evaluate.py`, `evaluate_ml.py`, `evaluate_russell.py` | Automated accuracy scoring against ground-truth attack labels |
+Detection combines a **streaming rule engine** (real-time sliding-window rules + adaptive EWMA spike detection) with a **supervised 13-feature Random Forest ML detector** that scores 5-minute traffic windows, achieving an **ROC AUC of 0.98** on authentic enterprise cyber-attack telemetry.
 
 ---
 
-## Quick Start & Demonstration
+## Architecture & Pipeline
 
-### 1. Visual AIML Demo (Matplotlib & Seaborn Charts)
-For project demonstrations, presentations, or lab evaluations, [`demo_visualize.py`](demo_visualize.py) displays 8 interactive charts directly inside VSCode or desktop terminals:
+| Pipeline Stage | Module / File | Responsibility |
+| :--- | :--- | :--- |
+| **Collect** | [`siem/ingest.py`](siem/ingest.py) | Merges multi-host log streams chronologically; supports batch ingestion and live `tail -f`. |
+| **Parse** | [`siem/parser.py`](siem/parser.py) | Normalizes Apache HTTP access, Linux `auth.log`, `syslog`, OpenVPN, and `dnsmasq` to unified schema. |
+| **Store & Search** | [`siem/store.py`](siem/store.py) | Embedded SQLite database with timestamp/IP indexes and FTS5 full-text search. |
+| **Streaming Rules** | [`siem/detect.py`](siem/detect.py) | Per-IP sliding window correlation rules (`ssh_bruteforce`, `web_scan`) + adaptive EWMA spike alerting. |
+| **Machine Learning** | [`siem/ml.py`](siem/ml.py) | 13-feature Random Forest classifier on 5-minute windows with evasion-aware training. |
+| **Enterprise Benchmark** | [`siem/russell.py`](siem/russell.py) | Multi-host log harvester and ground-truth label mapper for the AECID/AIT Russell Mitchell dataset. |
+| **AIML Visuals** | [`demo_visualize.py`](demo_visualize.py) | Generates the 4 publication charts (Timeline, Feature Importance, Confusion Matrix, ROC Curve). |
+| **Evaluation CLI** | [`evaluate_russell.py`](evaluate_russell.py) | Quantitative benchmark scoring: parse coverage, IP-level attribution, and attack phase detection. |
+| **Paper Generator** | [`generate_paper.py`](generate_paper.py) | Automated IEEE 2-column Word document assembler and headless LibreOffice PDF exporter. |
+| **Web Dashboard** | [`siem/server.py`](siem/server.py), `static/` | Zero-dependency browser dashboard (live event rates, alert feeds, instant IP search). |
 
-```bash
-# Option A: Instant synthetic demo (Fastest: ~5 seconds, no dataset needed)
-python demo_visualize.py --demo
+---
 
-# Option B: Ingest a slice of the Russell Mitchell dataset to a database
-python demo_visualize.py "/path/to/russellmitchell" --host intranet_server --db rm_demo.db
+## Repository Structure
 
-# Option C: Re-run charts instantly from an existing database (skips ingestion)
-python demo_visualize.py --db rm_demo.db --skip-ingest
+```text
+LightSIEM_prototype/
+├── IEEE_Paper_Full_Draft_LightSIEM.docx   # Complete IEEE 2-column paper draft
+├── IEEE_Paper_Full_Draft_LightSIEM.pdf    # Published PDF with embedded charts (6 pages)
+├── Presentation/                         # High-res charts and presentation guides
+│   ├── Chart_1_Timeline.png
+│   ├── Chart_2_Feature_Importance.png
+│   ├── Chart_3_Confusion_Matrix.png
+│   ├── Chart_4_ROC_Curve.png
+│   └── LightSIEM_Guide.pdf
+└── lightsiem/                            # Core application source directory
+    ├── assets/                           # High-res generated figures for IEEE paper
+    ├── siem/                             # SIEM Python package
+    │   ├── detect.py                     # Streaming sliding-window rules & EWMA
+    │   ├── gen_logs.py                   # Controlled synthetic attack log generator
+    │   ├── ingest.py                     # Multi-stream chronological log reader
+    │   ├── ml.py                         # 13-feature Random Forest ML engine
+    │   ├── parser.py                     # Multi-protocol log normalizer
+    │   ├── russell.py                    # Russell Mitchell dataset harvester
+    │   ├── server.py                     # Web server & REST API
+    │   └── store.py                      # SQLite & FTS5 storage backend
+    ├── static/                           # Web dashboard HTML/JS frontend
+    ├── demo_visualize.py                 # Interactive AIML visualization script
+    ├── evaluate_russell.py               # Ground-truth evaluation script
+    ├── generate_paper.py                 # IEEE docx/pdf paper generation tool
+    ├── lightsiem.py                      # Unified CLI entry point
+    ├── results_russell.json              # Evaluated benchmark metrics output
+    └── rm_local.db                       # Pre-ingested SQLite database (153k events)
 ```
 
-#### Charts Displayed:
-1. **Event Timeline & Alerts**: Traffic distribution over time with flagged attack timestamps.
-2. **Log Categories**: Bar chart of events by protocol (`http`, `ssh`, `syslog`, `openvpn`, `dns`).
-3. **Top Source IPs**: Identifies highest-volume IPs (confirmed attackers highlighted in red).
-4. **Feature Importance (Random Forest)**: Which network behaviors (failed logins, 4xx ratios, distinct URLs) signal malicious activity.
-5. **Confusion Matrix**: True Positive / False Positive breakdown on 5-minute traffic windows.
-6. **ROC Curves & AUC**: Side-by-side comparison of Isolation Forest vs Random Forest.
-7. **Model Comparison**: Precision, Recall, and F1-score across Rules, Isolation Forest, and Random Forest.
-8. **Anomaly Score Distribution**: Histogram of Isolation Forest scores showing separation of normal vs attack traffic.
+---
+
+## Quick Start & Usage
+
+### 1. Visual AIML Demo (4 Key Charts)
+Displays the 4 evaluation charts using the multi-host real-world dataset:
+
+```bash
+cd lightsiem
+
+# Instant run from cached database (153,174 events, ~2 seconds):
+python demo_visualize.py --skip-ingest
+
+# Or run instant synthetic demo (~5 seconds, no dataset needed):
+python demo_visualize.py --demo
+```
+
+**Charts generated in `assets/`:**
+- **Chart 1 — Timeline**: Event volume over time with 225 detected attack alerts overlaid.
+- **Chart 2 — Feature Importance**: Relative weight of the 13 behavioral ML features.
+- **Chart 3 — Confusion Matrix**: Classification of 2,485 five-minute windows ($1,675\text{ TN}, 0\text{ FP}, 370\text{ TP}$).
+- **Chart 4 — ROC Curve**: Random Forest ROC curve showing **AUC = 0.98**.
 
 ---
 
 ### 2. Interactive Web Dashboard
+Launch the zero-dependency browser dashboard:
+
 ```bash
-# Demo mode: generate sample data, ingest, and launch browser UI at http://127.0.0.1:8080
+# Serve pre-ingested multi-host database on http://127.0.0.1:8080:
+python lightsiem.py serve --db rm_local.db --port 8080
+
+# Or run self-contained instant demo mode:
 python lightsiem.py demo
-
-# Ingest custom log files and launch web UI:
-python lightsiem.py ingest auth.log access.log --db siem.db --year 2026
-python lightsiem.py serve --db siem.db --port 8080
 ```
-**Dashboard Features:** Live events-per-minute timeline, real-time alert table, top source IPs, and instant full-text/IP search.
+
+**Dashboard Features:**
+- Live events-per-minute traffic timeline.
+- Real-time alert feed with severity tags (`traffic_spike`, `web_scan`).
+- Top talker IP breakdown with reverse lookup.
+- Full-text and IP address search powered by SQLite FTS5.
 
 ---
 
-## Russell Mitchell Dataset Support
-
-LightSIEM natively supports the multi-host [Russell Mitchell Cyber Attack Dataset](https://www.ait.ac.at/) (AECID/AIT), parsing logs across directory structures like `gather/<host>/logs/` with associated `labels/` ground truth.
-
-> **Tip:** If your path contains spaces, always wrap it in quotation marks: `"/run/media/.../russellmitchell"`.
-
-### Inspect Available Files
-```bash
-python lightsiem.py russell list "/path/to/russellmitchell"
-```
-
-### Ingest Logs (With Host or Type Filtering)
-Since the full dataset is ~15 GB, you can ingest targeted subsets in seconds:
-```bash
-# Ingest only the target web server (recommended for quick demos)
-python lightsiem.py russell ingest "/path/to/russellmitchell" --host intranet_server --db rm_demo.db --serve
-
-# Ingest specific log types across all hosts (e.g., apache, auth, openvpn, dnsmasq)
-python lightsiem.py russell ingest "/path/to/russellmitchell" --type apache --db rm_demo.db
-```
-
-### Evaluate Detection Accuracy
-Score LightSIEM detections against ground-truth attack labels and the attacker action timeline:
-```bash
-python lightsiem.py russell evaluate "/path/to/russellmitchell" --db rm_demo.db --out results_russell.json
-```
-Reports:
-* **Ingestion Coverage**: Percentage of labelled lines successfully parsed.
-* **IP-Level Attribution**: Precision, Recall, and F1-score for identifying attacker IPs (e.g. `172.19.131.174`).
-* **Attack Phase Coverage**: Detection correlation with foothold, privilege escalation, and lateral movement.
-
----
-
-## Detection Engines
-
-### 1. Rule-Based Streaming Engine (`siem/detect.py`)
-Processes events in chronological order with bounded per-IP sliding windows:
-* **R1 `ssh_bruteforce`**: >= 8 failed SSH logins from one IP in 60 s
-* **R1b `ssh_low_and_slow`**: >= 40 failed logins from one IP in 1 h
-* **R2 `ssh_success_after_failures`**: Successful login after >= 5 failures in 5 min (possible account takeover)
-* **R3 `web_scan`**: >= 25 HTTP 401/403/404 errors from one IP in 60 s (vulnerability scanning)
-* **R4 `traffic_spike`**: Adaptive EWMA anomaly detection (alerts when traffic > mean + 4*std; excludes anomalous minutes from the baseline to prevent poisoning).
-
-### 2. Machine Learning Engine (`siem/ml.py`)
-Scores traffic behavior in 5-minute per-IP windows across 8 extracted behavioral features:
-* `log(events)`, failed SSH logins, distinct usernames, HTTP request count, 4xx error ratio, distinct-URL ratio, 404 count, 5xx count.
-
-Two interchangeable models:
-* **Isolation Forest (Unsupervised)**: Learns what normal traffic looks like from baseline logs; flags anomalous deviations without needing prior attack labels.
-* **Random Forest (Supervised)**: Learns distinct signatures of attack vs normal behavior; flags traffic with P(attack) >= 0.5.
+### 3. Real-World Benchmark Evaluation
+Run the automated scoring script against the AECID Russell Mitchell ground-truth labels:
 
 ```bash
-# Train Isolation Forest on normal baseline logs:
-python lightsiem.py train good_auth.log good_access.log --kind iforest --out model.pkl
-
-# Train Random Forest with known attacker IP labels:
-python lightsiem.py train auth.log access.log --kind rf --attackers attacker_ips.txt --out model.pkl
-
-# Ingest logs using both rules AND machine learning:
-python lightsiem.py ingest auth.log access.log --db siem.db --model model.pkl
+python evaluate_russell.py /path/to/russellmitchell --db rm_local.db --out results_russell.json
 ```
 
 ---
 
-## Advanced ML: Evasion-Aware Augmentation (v2)
-
-Standard supervised classifiers fail when attackers slow down their request rate or dilute error codes with legitimate requests.
-1. **Evasion-Aware Training (`--augment`)**: Synthesizes 11 disguised variations of attacker traffic during training (simulating 404 dilution and request rate throttling).
-2. **Evidence Accumulation**: Strong confidence (`P > 0.8`) raises an immediate alert; weaker confidence (`P > 0.3`) requires persistence across 3 consecutive windows to eliminate false alarms from occasional user typos.
+### 4. Regenerate IEEE Paper & PDF
+To rebuild the IEEE 2-column paper with updated chart figures and performance metrics:
 
 ```bash
-python lightsiem.py train auth.log access.log --kind rf --attackers attacker_ips.txt --augment --out model_v2.pkl
+python generate_paper.py
 ```
+Outputs:
+- `../IEEE_Paper_Full_Draft_LightSIEM.docx`
+- `../IEEE_Paper_Full_Draft_LightSIEM.pdf`
 
 ---
 
-## Installation & Requirements
+## Machine Learning Feature Engineering (13 Features)
 
-* **Python 3.9+**
-* Pure Python standard library for basic rule ingestion and web UI.
-* For AI/ML and Visualization features:
+Features are computed over 5-minute per-IP windows (`siem/ml.py`):
+
+| # | Feature Name | Description & Security Purpose |
+| :-: | :--- | :--- |
+| 1 | `distinct_path_depth` | Average URL path depth (scanners probe deeply nested endpoints like `/wp-content/plugins/...`). |
+| 2 | `post_ratio` | Ratio of HTTP POST requests (webshell uploads, exploit delivery, credential brute-forcing). |
+| 3 | `request_rate` | HTTP requests per second in window (quantifies automated scanner throughput). |
+| 4 | `distinct_url_ratio` | Unique URLs probed relative to total requests (broad reconnaissance identifier). |
+| 5 | `webshell_indicator` | Regex pattern matches for execution parameters (`shell`, `cmd`, `upload`, `exec`, `eval`). |
+| 6 | `http_requests` | Total HTTP requests in the 5-minute window. |
+| 7 | `log_events` | Total log volume in window ($\log(1+n)$ transformed). |
+| 8 | `err4xx_ratio` | Proportion of 4xx client errors relative to total HTTP requests. |
+| 9 | `n404` | Raw count of HTTP 404 (Not Found) responses. |
+| 10 | `consecutive_404_ratio` | Fraction of 404 responses immediately following another 404 (sequential brute-forcing). |
+| 11 | `n5xx` | Raw count of HTTP 5xx server errors (indicates crash attempts or malformed exploit payloads). |
+| 12 | `ssh_fail` | Count of failed SSH authentication attempts. |
+| 13 | `distinct_users` | Number of distinct usernames targeted in authentication attempts. |
+
+---
+
+## Real-World Benchmark Results
+
+Evaluated on the **AECID Russell Mitchell Cyber Attack Dataset** across 4 enterprise hosts (`intranet_server`, `webserver`, `mail`, `internal_share`):
+
+- **Total Ingested Events:** 153,174 events
+- **Streaming Rule Alerts:** 225 real-time alerts (`traffic_spike`, `web_scan`)
+- **Attacker IP Attribution:** 
+  $$\text{Precision} = 1.00, \quad \text{Recall} = 1.00, \quad F_1 = 1.00 \quad (\text{Attacker: } 172.19.131.174)$$
+- **Random Forest ROC AUC:** **0.98** (0.9772)
+- **Window Confusion Matrix (2,485 windows):**
+  - **True Negatives:** 1,675 windows
+  - **False Positives:** **0 windows** (0.0% false alarm rate)
+  - **True Positives:** 370 windows
+  - **False Negatives:** 440 windows *(quiescent pauses between attack commands)*
+- **Web Attack Parse Coverage:** 
+  - Direct HTTP Attacks: **99.5%** (7,687 / 7,723)
+  - `dirb` Directory Scans: **99.3%** (4,462 / 4,493)
+  - `wpscan` Vulnerability Scans: **99.3%** (3,186 / 3,207)
+  - Webshell Uploads: **100%** (3 / 3)
+  - Sudo Privilege Escalation: **100%** (3 / 3)
+
+---
+
+## Requirements & Installation
+
+- **Python 3.9+**
+- Core ingestion, parsing, database, rules, and web server require **standard library only**.
+- AI/ML and visualization dependencies:
   ```bash
   pip install scikit-learn numpy matplotlib seaborn
   ```
