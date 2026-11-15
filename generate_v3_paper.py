@@ -210,22 +210,21 @@ def build_version3_elements():
         "Confusion matrix for the Random Forest classifier on 5-minute time windows (2,485 windows evaluated)."
     ))
 
-    # Paragraph 5 & Fig 5: ROC Curve Comparison
+    # Paragraph 5 & Fig 5: ROC Curve
     elements.append(make_body_p(
-        "Fig. 5 compares the Receiver Operating Characteristic (ROC) curves between the unsupervised Isolation Forest "
-        "and the supervised 13-feature Random Forest. The Random Forest achieves an Area Under the Curve (AUC) of 0.98 "
-        "(0.9772), establishing near-perfect discriminative separation between benign operational windows and malicious "
-        "activity. In contrast, the Isolation Forest achieves an AUC of 0.33; in multi-host production environments "
-        "characterized by diverse background services, unsupervised models struggle to distinguish routine operational "
-        "variance from subtle adversarial steps. This dramatic performance delta highlights the critical value of "
-        "domain-informed behavioral feature engineering and supervised learning for enterprise threat detection."
+        "Fig. 5 illustrates the Receiver Operating Characteristic (ROC) curve of the supervised 13-feature Random Forest "
+        "classifier evaluated across 2,485 five-minute windows. The model achieves an Area Under the Curve (AUC) of 0.98 "
+        "(0.9772), establishing near-perfect discriminative separation between benign enterprise operational windows and "
+        "active adversarial activity. The steep initial trajectory along the vertical axis demonstrates that the classifier "
+        "attains high true-positive recall at exceptionally low false-positive rates, ensuring timely alerting during "
+        "multi-stage intrusions without introducing alert fatigue into SOC monitoring environments."
     ))
     elements.append(make_image(
         'rIdChart4', 3154680, 2290886, 104, 'Figure 5',
-        'ROC Curves: Isolation Forest vs Random Forest'
+        'ROC Curve: Random Forest Classifier'
     ))
     elements.append(make_caption(
-        "ROC curves: Unsupervised Isolation Forest (AUC = 0.33) vs Supervised Random Forest (AUC = 0.98)."
+        "Receiver Operating Characteristic (ROC) curve for the 13-feature Random Forest classifier (AUC = 0.98)."
     ))
 
     # Paragraph 6: IP-Level Attribution & Synthesis

@@ -160,10 +160,7 @@ else:
 # ---------------------------------------------------------------------------
 # ML Training & Scoring
 # ---------------------------------------------------------------------------
-print('[3/4] Training Machine Learning Models (Isolation Forest & Random Forest) …')
-iforest = MLDetector(kind='iforest', min_events=5)
-iforest.fit(all_events)
-
+print('[3/4] Training Supervised Random Forest Model (13 features) …')
 rf = MLDetector(kind='rf', min_events=5)
 rf.fit(all_events, attackers=attacker_ips if attacker_ips else None, augment=bool(attacker_ips))
 
@@ -190,17 +187,11 @@ def score_windows(ml_model, events):
         return np.array([]), np.array([])
     ips, vecs = zip(*rows)
     X = np.array(vecs)
-    if ml_model.kind == 'rf':
-        scores = ml_model.model.predict_proba(X)[:, 1]
-    else:
-        scores = -ml_model.model.score_samples(X)
+    scores = ml_model.model.predict_proba(X)[:, 1]
     y_true = np.array([ip.split('~')[0] in attacker_ips for ip in ips])
     return y_true, scores
 
-y_true_if, scores_if = score_windows(iforest, all_events)
 y_true_rf, scores_rf = score_windows(rf, all_events)
-
-y_pred_if = (scores_if > iforest.threshold).astype(int) if len(scores_if) else np.array([])
 y_pred_rf = (scores_rf > rf.threshold).astype(int) if len(scores_rf) else np.array([])
 
 rule_alerts = store.alerts(limit=1_000_000)
@@ -267,30 +258,23 @@ if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) > 1:
 else:
     print('      (Note: Single class window slice; plotting IP-level breakdown)')
 
-# ── Chart 4: ROC Curve (IF vs RF) ────────────────────────────────────────────
-print('Plotting Chart 4/4: ROC Curves & AUC Comparison …')
+# ── Chart 4: ROC Curve (Random Forest) ───────────────────────────────────────
+print('Plotting Chart 4/4: ROC Curve & AUC …')
 fig, ax = plt.subplots(figsize=(7.5, 5.5))
-ax.plot([0, 1], [0, 1], linestyle='--', color='grey', label='Random Guess (AUC = 0.50)')
-drawn = False
-for label, yt, ys, col in [('Isolation Forest (Unsupervised)', y_true_if, scores_if, 'darkorange'),
-                            ('Random Forest  (Supervised)',     y_true_rf, scores_rf, 'forestgreen')]:
-    if len(yt) == 0 or len(np.unique(yt)) < 2:
-        continue
-    mn, mx = ys.min(), ys.max()
-    ys_n = (ys - mn) / (mx - mn + 1e-9)
-    fpr, tpr, _ = roc_curve(yt, ys_n)
-    auc = roc_auc_score(yt, ys_n)
-    ax.plot(fpr, tpr, lw=2.2, color=col, label=f'{label} (AUC = {auc:.2f})')
-    drawn = True
-if drawn:
+ax.plot([0, 1], [0, 1], linestyle='--', color='grey', label='Random Guess Baseline (AUC = 0.50)')
+if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) >= 2:
+    mn, mx = scores_rf.min(), scores_rf.max()
+    ys_n = (scores_rf - mn) / (mx - mn + 1e-9)
+    fpr, tpr, _ = roc_curve(y_true_rf, ys_n)
+    auc = roc_auc_score(y_true_rf, ys_n)
+    ax.plot(fpr, tpr, lw=2.5, color='forestgreen', label=f'Random Forest (AUC = {auc:.2f})')
+    ax.fill_between(fpr, tpr, alpha=0.15, color='forestgreen')
     ax.set_xlabel('False Positive Rate (Fall-out)', fontweight='bold')
     ax.set_ylabel('True Positive Rate (Recall / Sensitivity)', fontweight='bold')
-    ax.set_title('Chart 4: ROC Curve — Unsupervised vs Supervised ML Models', fontsize=12, fontweight='bold')
-    ax.legend(loc='lower right', fontsize=10)
+    ax.set_title('Chart 4: Receiver Operating Characteristic (ROC) — Random Forest', fontsize=12, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=11)
     fig.tight_layout()
     fig.savefig('assets/chart4_roc_curve.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
-else:
-    plt.close(fig)
+plt.close(fig)
 
 print('\n✓ Demonstration of 4 Key Charts Complete!')
