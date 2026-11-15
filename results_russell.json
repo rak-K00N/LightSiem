@@ -1,18 +1,18 @@
 {
   "dataset": {
-    "root": "/run/media/faang/UBUNTU 26_0/lightsiem data/russellmitchell",
+    "root": "/home/faang/Documents/LightSIEM_prototype/russellmitchell",
     "label_files": 8,
     "labelled_lines": 61862,
     "year": 2022
   },
   "db": {
-    "path": "rm_demo.db",
-    "events": 12672,
-    "alerts": 3,
+    "path": "rm_local.db",
+    "events": 38016,
+    "alerts": 9,
     "categories": {
-      "http": 11006,
-      "other": 1663,
-      "ssh_ok": 3
+      "http": 33018,
+      "other": 4989,
+      "ssh_ok": 9
     }
   },
   "ingestion_coverage": {
@@ -149,8 +149,8 @@
     "f1": 1.0
   },
   "alerts_by_rule": {
-    "web_scan": 1,
-    "traffic_spike": 2
+    "web_scan": 3,
+    "traffic_spike": 6
   },
   "attack_phase_detection": {
     "foothold": "no parseable lines",
@@ -160,11 +160,11 @@
         1642996762,
         1642999086
       ],
-      "alerts_in_window": 2,
+      "alerts_in_window": 6,
       "detected": true,
       "alert_rules": [
-        "web_scan",
-        "traffic_spike"
+        "traffic_spike",
+        "web_scan"
       ]
     },
     "exfiltrate": "no labelled lines",
@@ -231,5 +231,5 @@
       "dnsteal_stop": 1
     }
   },
-  "elapsed_s": 19.6
+  "elapsed_s": 21.2
 }
