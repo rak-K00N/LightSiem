@@ -31,16 +31,7 @@ Detection combines a **streaming rule engine** (real-time sliding-window rules +
 ## Repository Structure
 
 ```text
-LightSIEM_prototype/
-├── IEEE_Paper_Full_Draft_LightSIEM.docx   # Complete IEEE 2-column paper draft
-├── IEEE_Paper_Full_Draft_LightSIEM.pdf    # Published PDF with embedded charts (6 pages)
-├── Presentation/                         # High-res charts and presentation guides
-│   ├── Chart_1_Timeline.png
-│   ├── Chart_2_Feature_Importance.png
-│   ├── Chart_3_Confusion_Matrix.png
-│   ├── Chart_4_ROC_Curve.png
-│   └── LightSIEM_Guide.pdf
-└── lightsiem/                            # Core application source directory
+lightsiem/                            # Core application source directory
     ├── assets/                           # High-res generated figures for IEEE paper
     ├── siem/                             # SIEM Python package
     │   ├── detect.py                     # Streaming sliding-window rules & EWMA
