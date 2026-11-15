@@ -2,25 +2,29 @@
 """
 LightSIEM – Visual Demo (runs in VSCode like your AIML lab programs)
 =====================================================================
-Shows 8 real AI/ML charts:
+Shows 4 key AIML charts using the Russell Mitchell real-world cyber-attack dataset:
   Chart 1 – Event timeline with attack alerts overlaid
-  Chart 2 – Bar chart: events per log category
-  Chart 3 – Top 10 source IPs (attacker in red)
-  Chart 4 – Feature importance (Random Forest)
-  Chart 5 – Confusion Matrix (Random Forest, 5-min traffic windows)
-  Chart 6 – ROC curve (Random Forest vs Isolation Forest with AUC)
-  Chart 7 – Bar chart: Precision / Recall / F1 (Rules vs IF vs RF)
-  Chart 8 – Anomaly score distribution (Isolation Forest)
+  Chart 2 – Feature importance (Random Forest, 13 features)
+  Chart 3 – Confusion Matrix (Random Forest, 5-min traffic windows)
+  Chart 4 – ROC curve (Random Forest vs Isolation Forest with AUC)
+
+Option 1: 13 features (8 original + 5 new: path depth, webshell indicator,
+          request rate, consecutive 404 ratio, POST ratio)
+Option 4: Multi-host ingestion (intranet_server + webserver + mail + internal_share)
+          for richer normal-traffic baseline and better ML discrimination.
 
 Usage
 -----
-  # 1. Default (uses local dataset on intranet_server):
+  # 1. Default (all 4 hosts, full ML):
   python demo_visualize.py
 
-  # 2. Fastest instant demo (synthetic logs, ~5 seconds):
+  # 2. Instant synthetic demo (~5 sec, no dataset):
   python demo_visualize.py --demo
 
-  # 3. Specify custom host or path:
+  # 3. Skip re-ingestion, reuse cached DB:
+  python demo_visualize.py --skip-ingest
+
+  # 4. Single host only:
   python demo_visualize.py /home/faang/Documents/LightSIEM_prototype/russellmitchell --host intranet_server
 """
 
@@ -96,7 +100,7 @@ if args.demo:
 else:
     ROOT = args.root
     YEAR = args.year
-    hosts = args.hosts or ['intranet_server']  # default to victim server for fast demo
+    hosts = args.hosts or ['intranet_server', 'webserver', 'mail', 'internal_share']  # Option 4: all hosts with HTTP/auth logs
 
     from siem.russell import collect_log_files, load_labels, ingest_dataset
     from siem.ingest import read_events as _re
@@ -228,7 +232,8 @@ if timeline:
     ax.set_ylabel('Events per 5-Minute Window')
     ax.legend(loc='upper right')
     fig.tight_layout()
-    plt.show()
+    fig.savefig('assets/chart1_timeline.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 # ── Chart 2: Feature Importance (Random Forest) ──────────────────────────────
 print('Plotting Chart 2/4: Feature Importance (Explainable AI) …')
@@ -241,7 +246,8 @@ ax.bar_label(bars, fmt='%.3f', padding=4, fontsize=9)
 ax.set_title('Chart 2: Random Forest — Feature Importances\n(Which behavioral features identify the attacker?)', fontsize=12, fontweight='bold')
 ax.set_xlabel('Relative Importance Weight')
 fig.tight_layout()
-plt.show()
+fig.savefig('assets/chart2_feature_importance.png', dpi=150, bbox_inches='tight')
+plt.close(fig)
 
 # ── Chart 3: Confusion Matrix (Random Forest) ────────────────────────────────
 print('Plotting Chart 3/4: Confusion Matrix (Traffic Windows) …')
@@ -256,7 +262,8 @@ if len(y_true_rf) > 0 and len(np.unique(y_true_rf)) > 1:
     ax.set_xlabel('Predicted Label', fontweight='bold')
     ax.set_ylabel('Actual Ground-Truth Label', fontweight='bold')
     fig.tight_layout()
-    plt.show()
+    fig.savefig('assets/chart3_confusion_matrix.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
 else:
     print('      (Note: Single class window slice; plotting IP-level breakdown)')
 
@@ -281,7 +288,8 @@ if drawn:
     ax.set_title('Chart 4: ROC Curve — Unsupervised vs Supervised ML Models', fontsize=12, fontweight='bold')
     ax.legend(loc='lower right', fontsize=10)
     fig.tight_layout()
-    plt.show()
+    fig.savefig('assets/chart4_roc_curve.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
 else:
     plt.close(fig)
 

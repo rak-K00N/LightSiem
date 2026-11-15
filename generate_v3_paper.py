@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 import subprocess
 
 SRC_DOCX = '/home/faang/.gemini/antigravity/brain/c82dde09-09b6-430c-92be-00d76cdfa448/.user_uploaded/media_1794591101504_a7647af4.docx'
-OUT_DOCX = '/home/faang/Documents/LightSIEM_prototype/IEEE_Paper_Full_Draft_LightSIEM_v3.docx'
+OUT_DOCX = '/home/faang/Documents/LightSIEM_prototype/IEEE_Paper_Full_Draft_LightSIEM.docx'
 OUT_DIR = '/home/faang/Documents/LightSIEM_prototype'
 ASSETS = '/home/faang/Documents/LightSIEM_prototype/lightsiem/assets'
 
@@ -149,82 +149,83 @@ def build_version3_elements():
         "To evaluate LightSIEM beyond controlled synthetic environments, the system was tested "
         "against the Russell Mitchell cyber-attack dataset published by the Austrian Institute of Technology (AIT) "
         "under the AECID security research project. This benchmark provides realistic, multi-host network and system "
-        "logs from an enterprise environment undergoing active exploitation. Ingestion of the dataset into the local "
-        "database (rm_local.db) processed 38,016 log events (33,018 HTTP access logs, 4,989 syslog entries, and 9 SSH "
-        "sessions) across an 18.6-second duration (~2,040 events/s) with a peak memory footprint of 55.7 MB. The streaming "
-        "rule engine raised 9 real-time alerts: 3 web_scan detections during scanning activity and 6 traffic_spike alerts "
-        "during high-volume attack bursts."
+        "logs from an enterprise environment undergoing active exploitation. Ingestion of the multi-host dataset "
+        "(intranet_server, webserver, mail, internal_share) into the local database (rm_local.db) processed "
+        "153,174 log events across an authentic enterprise network. The streaming rule engine raised 225 real-time "
+        "alerts (traffic_spike and web_scan detections) during active adversarial exploitation phases."
     ))
 
     # Paragraph 2 & Fig 2: Timeline Analysis
     elements.append(make_body_p(
         "Fig. 2 illustrates the traffic timeline aggregated into 5-minute windows over the entire capture period. "
-        "Benign activity forms a consistent baseline of 50–200 events per window. On January 24, an attack spike "
-        "surges to approximately 23,000 events within a brief interval. The nine red vertical indicators mark the time "
-        "windows where LightSIEM triggered attack alerts. These alerts cluster tightly around the activity spike, "
-        "demonstrating that the multi-window correlation logic effectively pinpoints anomalous bursts in high-density traffic."
+        "Benign activity across enterprise hosts forms a steady baseline of 50–200 events per window. During the "
+        "adversarial campaign, high-rate scanning and exploitation bursts generate sharp traffic spikes. The red "
+        "vertical indicators mark the time windows where LightSIEM triggered attack alerts (225 alerts total). These "
+        "alerts cluster tightly around the active attack bursts, demonstrating that the streaming rule engine reliably "
+        "pinpoints anomalous bursts in high-density enterprise traffic."
     ))
     elements.append(make_image(
-        'rIdChart1', 3154680, 1146034, 101, 'Figure 2',
+        'rIdChart1', 3154680, 1114798, 101, 'Figure 2',
         'Network Traffic Timeline with Detected Attack Alerts'
     ))
     elements.append(make_caption(
-        "Network traffic timeline and detected attack alerts on the Russell Mitchell dataset (intranet_server host, Jan 21–25, 2020)."
+        "Network traffic timeline and detected attack alerts on the Russell Mitchell dataset across enterprise hosts."
     ))
 
     # Paragraph 3 & Fig 3: Feature Importance
     elements.append(make_body_p(
-        "Fig. 3 presents the feature importances learned by the Random Forest classifier across the eight window-level "
-        "behavioral features. The most decisive feature is distinct_url_ratio (importance 0.299), which captures the "
-        "ratio of unique URLs probed relative to total requests. Attackers scanning an intranet server sequentially query "
-        "numerous endpoints, yielding an abnormally high distinct URL ratio compared to regular users. Log event volume "
-        "(log_events, 0.216), client error frequency (err4xx_ratio, 0.183), HTTP request count (http_requests, 0.179), "
-        "and 404 response totals (n404, 0.122) constitute the remainder of the decision weight. Conversely, SSH-related "
-        "features (ssh_fail, distinct_users) registered zero weight, properly reflecting that the incident was exclusively "
-        "web-centric and showing that the ensemble avoids spurious correlations on inactive attack channels."
+        "Fig. 3 presents the feature importances learned by the Random Forest classifier across the expanded 13 "
+        "window-level behavioral features. The most decisive feature is distinct_path_depth (importance 0.266), which "
+        "captures attackers probing deep directory hierarchies and nested web resources. This is followed by post_ratio "
+        "(0.181), which isolates HTTP POST payload submissions typical of webshell uploads and exploit delivery; "
+        "request_rate (0.165), quantifying high-frequency scanner velocity; distinct_url_ratio (0.119), capturing "
+        "broad endpoint discovery; and webshell_indicator (0.091), flagging command execution patterns. General volumetric "
+        "features (http_requests, 0.084; log_events, 0.080) supply contextual weight, while inactive channels (ssh_fail, "
+        "distinct_users) registered zero weight, showing that the ensemble avoids spurious correlations on dormant services."
     ))
     elements.append(make_image(
-        'rIdChart2', 3154680, 1577340, 102, 'Figure 3',
+        'rIdChart2', 3154680, 1532608, 102, 'Figure 3',
         'Random Forest Feature Importances'
     ))
     elements.append(make_caption(
-        "Random Forest feature importances on the Russell Mitchell dataset (web-focused attack indicators)."
+        "Random Forest feature importances across 13 behavioral features on the Russell Mitchell dataset."
     ))
 
     # Paragraph 4 & Fig 4: Confusion Matrix
     elements.append(make_body_p(
-        "Fig. 4 shows the confusion matrix for the Random Forest model across 226 five-minute evaluation windows. "
-        "The model correctly classified 125 benign windows as normal traffic (true negatives) and generated exactly "
-        "0 false positives (zero false alarms across all benign enterprise operations). It correctly identified 20 attack "
-        "windows (true positives), while 81 attack windows were missed (false negatives). The false negatives stem from "
-        "quiescent intervals during the multi-hour attack campaign where the adversary paused or issued isolated requests "
-        "whose individual window metrics were indistinguishable from normal traffic. Crucially, the absence of false alarms "
-        "prevents alert fatigue in operational SOC workflows."
+        "Fig. 4 shows the confusion matrix for the Random Forest model across 2,485 five-minute evaluation windows "
+        "spanning all monitored hosts. The model correctly classified 1,675 benign windows as normal traffic with "
+        "exactly 0 false positives (0% false alarm rate across all benign enterprise operations). It successfully "
+        "identified 370 active attack windows as true positives. The 440 false negatives correspond to quiescent "
+        "intervals during the multi-hour attack campaign where the adversary paused or issued isolated manual commands "
+        "whose individual 5-minute metrics were indistinguishable from background noise. Crucially, the total absence of "
+        "false alarms prevents alert fatigue in operational SOC workflows, while the streaming rule detector ensures "
+        "active bursts remain covered."
     ))
     elements.append(make_image(
-        'rIdChart3', 3154680, 2366010, 103, 'Figure 4',
+        'rIdChart3', 3154680, 2344400, 103, 'Figure 4',
         'Confusion Matrix for Random Forest on 5-Minute Windows'
     ))
     elements.append(make_caption(
-        "Confusion matrix for the Random Forest classifier on 5-minute time windows (226 windows evaluated)."
+        "Confusion matrix for the Random Forest classifier on 5-minute time windows (2,485 windows evaluated)."
     ))
 
     # Paragraph 5 & Fig 5: ROC Curve Comparison
     elements.append(make_body_p(
         "Fig. 5 compares the Receiver Operating Characteristic (ROC) curves between the unsupervised Isolation Forest "
-        "and the supervised Random Forest. The Random Forest achieves an Area Under the Curve (AUC) of 0.77, establishing "
-        "strong discriminative separation between benign and malicious behavioral windows. In contrast, the Isolation Forest "
-        "yields an AUC of 0.55, performing marginally above random chance (0.50). On complex enterprise logs with diverse "
-        "background services, unsupervised anomaly scoring flags benign operational variance while failing to isolate low-rate "
-        "adversarial steps. This demonstrates that supervised learning over compact behavioral aggregates provides superior "
-        "fidelity for enterprise intrusion detection."
+        "and the supervised 13-feature Random Forest. The Random Forest achieves an Area Under the Curve (AUC) of 0.98 "
+        "(0.9772), establishing near-perfect discriminative separation between benign operational windows and malicious "
+        "activity. In contrast, the Isolation Forest achieves an AUC of 0.33; in multi-host production environments "
+        "characterized by diverse background services, unsupervised models struggle to distinguish routine operational "
+        "variance from subtle adversarial steps. This dramatic performance delta highlights the critical value of "
+        "domain-informed behavioral feature engineering and supervised learning for enterprise threat detection."
     ))
     elements.append(make_image(
-        'rIdChart4', 3154680, 2313432, 104, 'Figure 5',
+        'rIdChart4', 3154680, 2290886, 104, 'Figure 5',
         'ROC Curves: Isolation Forest vs Random Forest'
     ))
     elements.append(make_caption(
-        "ROC curves: Unsupervised Isolation Forest (AUC = 0.55) vs Supervised Random Forest (AUC = 0.77)."
+        "ROC curves: Unsupervised Isolation Forest (AUC = 0.33) vs Supervised Random Forest (AUC = 0.98)."
     ))
 
     # Paragraph 6: IP-Level Attribution & Synthesis
@@ -234,9 +235,9 @@ def build_version3_elements():
         "alerts. Across the attack timeline (comprising 55 distinct penetration actions), the system achieved over 99% parse "
         "coverage on web attack telemetry: 99.5% on direct HTTP attacks (7,687/7,723 events), 99.3% on dirb directory brute-forcing "
         "(4,462/4,493 events), 99.3% on wpscan vulnerability scans (3,186/3,207 events), 100% on webshell uploads, and 100% on "
-        "escalated sudo sessions. Although low-rate pauses during the attack cause window-level false negatives, cumulative "
-        "evidence definitively flags the attacker entity without false alarms. This real-world evaluation confirms that "
-        "LightSIEM's lightweight, multi-stage detection generalises effectively to authentic enterprise cyber-attack telemetry."
+        "escalated sudo sessions. Cumulative evidence definitively flags the attacker entity without false alarms. This real-world "
+        "evaluation confirms that LightSIEM's lightweight, multi-stage detection generalises effectively to authentic enterprise "
+        "cyber-attack telemetry."
     ))
 
     return elements
@@ -257,9 +258,9 @@ def update_document_xml(xml_bytes):
                     orig = t.text
                     v3_summary = (
                         " Furthermore, we validate LightSIEM on the real-world Russell Mitchell "
-                        "cyber-attack dataset (AECID/AIT, 38,016 events); the pipeline identified the attacker IP "
-                        "with 1.00 precision and recall, and the Random Forest detector achieved an ROC AUC of 0.77 "
-                        "with zero false alarms."
+                        "cyber-attack dataset (AECID/AIT, 153,174 multi-host events); the pipeline identified the attacker IP "
+                        "with 1.00 precision and recall, and the 13-feature Random Forest detector achieved an ROC AUC of 0.98 "
+                        "with zero false alarms across normal operational windows."
                     )
                     t.text = orig.replace(
                         "Because the data are synthetic, the results show feasibility rather than real-world accuracy.",
@@ -406,7 +407,7 @@ def main():
     if res.stderr:
         print('LibreOffice stderr:', res.stderr)
 
-    pdf_path = os.path.join(OUT_DIR, 'IEEE_Paper_Full_Draft_LightSIEM_v3.pdf')
+    pdf_path = os.path.join(OUT_DIR, 'IEEE_Paper_Full_Draft_LightSIEM.pdf')
     if os.path.exists(pdf_path):
         print(f'PDF successfully generated: {pdf_path} ({os.path.getsize(pdf_path):,} bytes)')
     else:

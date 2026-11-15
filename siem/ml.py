@@ -4,9 +4,16 @@ IDEA: rules only catch attacks somebody wrote a rule for.  Instead of writing ru
 NORMAL 5-minute window of activity looks like for one source IP, and flag windows that look unlike anything seen
 in normal traffic.  No labelled attacks are needed for training - only a period of known-good logs.
 
-Features (per source IP per 5-minute window):
-  log(events), failed SSH logins, distinct SSH usernames tried, HTTP requests, share of 4xx errors,
-  distinct URLs / requests, number of 404s, number of 5xx.
+Features (per source IP per 5-minute window) - v3 extended set:
+  Original 8: log(events), failed SSH logins, distinct SSH usernames tried, HTTP requests, share of 4xx errors,
+              distinct URLs / requests, number of 404s, number of 5xx.
+  New 5 (Option 1 improvement):
+    distinct_path_depth   - avg number of URL path segments (scanners probe many deep nested paths)
+    webshell_indicator    - share of POST/GET requests hitting shell/cmd/exec/upload/backdoor-like URLs
+    request_rate          - HTTP requests per second in this window (scanners burst fast)
+    consecutive_404_ratio - fraction of requests that are 404 immediately following another 404 (sequential scan)
+    post_ratio            - fraction of requests that are POST (webshell uploads, exploit attempts use POST)
+
 Two interchangeable models (same features, same streaming code):
   kind='iforest'  UNSUPERVISED Isolation Forest. Learns 'normal' from known-good logs only; flags anything unusual.
                   Threshold = q-quantile of scores on the training windows (default 0.1%).
@@ -19,19 +26,40 @@ false alarms of ordinary clients whose few requests happened to include a couple
 Unsupervised can say "unusual" but not "malicious" (e.g. a legitimate crawler looks unusual); supervised can tell the
 two apart but only knows what the labels taught it.  Windows are scored as soon as their 5-minute bucket closes.
 """
-import math, pickle
+import math, pickle, re
 import numpy as np
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 
-FEATURES = ['log_events', 'ssh_fail', 'distinct_users', 'http_requests', 'err4xx_ratio', 'distinct_url_ratio', 'n404', 'n5xx']
+FEATURES = [
+    # --- original 8 ---
+    'log_events', 'ssh_fail', 'distinct_users', 'http_requests',
+    'err4xx_ratio', 'distinct_url_ratio', 'n404', 'n5xx',
+    # --- new 5 (Option 1) ---
+    'distinct_path_depth', 'webshell_indicator', 'request_rate',
+    'consecutive_404_ratio', 'post_ratio',
+]
+
+# Patterns that indicate webshell/exploit URL access
+_WEBSHELL_RE = re.compile(
+    r'(?:shell|cmd|exec|eval|backdoor|upload|passwd|shadow|/etc/|'
+    r'wp-login|xmlrpc|\.php\?|base64|system\(|passthru|wget|curl|'
+    r'/admin|/cgi-bin|\.asp|\.jsp|/upload|/tmp/)',
+    re.IGNORECASE
+)
 
 
 class _Win:
-    __slots__ = ('n', 'ssh', 'users', 'http', 'e4', 'paths', 'e404', 'e5')
+    __slots__ = ('n', 'ssh', 'users', 'http', 'e4', 'paths', 'e404', 'e5',
+                 'path_depths', 'webshell_hits', 'ts_list', 'post_count',
+                 'statuses')
 
     def __init__(self):
         self.n = self.ssh = self.http = self.e4 = self.e404 = self.e5 = 0
+        self.webshell_hits = self.post_count = 0
         self.users, self.paths = set(), set()
+        self.path_depths = []   # depth of each URL path
+        self.ts_list = []       # timestamps of HTTP events (for rate calc)
+        self.statuses = []      # HTTP status codes in order (for consecutive 404)
 
     def add(self, e):
         self.n += 1
@@ -45,13 +73,60 @@ class _Win:
             if 400 <= st < 500: self.e4 += 1
             if st == 404: self.e404 += 1
             if st >= 500: self.e5 += 1
-            parts = e['msg'].split(' ', 2)
-            if len(parts) > 1: self.paths.add(parts[1])
+
+            msg = e['msg']
+            parts = msg.split(' ', 2)
+            if len(parts) > 1:
+                path = parts[1]
+                self.paths.add(path)
+                # Path depth: count '/' segments
+                depth = len([s for s in path.split('/') if s])
+                self.path_depths.append(depth)
+                # Webshell indicator
+                if _WEBSHELL_RE.search(path):
+                    self.webshell_hits += 1
+                # POST ratio
+                if parts[0].upper() == 'POST':
+                    self.post_count += 1
+
+            self.ts_list.append(e['ts'])
+            self.statuses.append(st)
 
     def vector(self):
         h = self.http
-        return [math.log1p(self.n), self.ssh, len(self.users), h, self.e4 / h if h else 0.0,
-                len(self.paths) / h if h else 0.0, self.e404, self.e5]
+
+        # distinct_path_depth: avg depth of URL paths probed
+        avg_depth = (sum(self.path_depths) / len(self.path_depths)
+                     if self.path_depths else 0.0)
+
+        # webshell_indicator: ratio of requests hitting shell-like URLs
+        webshell_ratio = self.webshell_hits / h if h else 0.0
+
+        # request_rate: HTTP requests per second in this window
+        if len(self.ts_list) >= 2:
+            span = max(self.ts_list) - min(self.ts_list)
+            rate = h / span if span > 0 else float(h)
+        else:
+            rate = 0.0
+
+        # consecutive_404_ratio: fraction of 404s that follow another 404
+        consec = 0
+        for i in range(1, len(self.statuses)):
+            if self.statuses[i] == 404 and self.statuses[i - 1] == 404:
+                consec += 1
+        consec_ratio = consec / h if h else 0.0
+
+        # post_ratio
+        post_ratio = self.post_count / h if h else 0.0
+
+        return [
+            math.log1p(self.n), self.ssh, len(self.users), h,
+            self.e4 / h if h else 0.0,
+            len(self.paths) / h if h else 0.0,
+            self.e404, self.e5,
+            # new features
+            avg_depth, webshell_ratio, rate, consec_ratio, post_ratio,
+        ]
 
 
 class MLDetector:
