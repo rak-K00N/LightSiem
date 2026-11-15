@@ -1,43 +1,1228 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LightSIEM</title>
-<style>
-:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mut:#667085;--bd:#e3e6eb;--ac:#2a3a8c;--hi:#d92d20;--me:#dc6803;--cr:#7a1010}
-@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b2029;--tx:#e8ebf2;--mut:#9aa3b5;--bd:#2c3340;--ac:#8fa2ff}}
-*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
-header{padding:14px 20px;border-bottom:1px solid var(--bd);background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-h1{font-size:18px;margin:0;color:var(--ac)}main{padding:16px 20px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;min-width:0}.card h2{font-size:13px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
-.wide{grid-column:1/-1}.kpi{display:flex;gap:22px;flex-wrap:wrap}.kpi b{display:block;font-size:22px}.kpi span{color:var(--mut);font-size:12px}
-table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--bd);vertical-align:top}th{color:var(--mut);font-weight:600}
-.scroll{overflow:auto;max-height:300px}.sev-high,.sev-critical{color:var(--hi);font-weight:600}.sev-medium,.sev-warning{color:var(--me)}.sev-critical{color:var(--cr)}
-form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}input,select,button{font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--tx)}button{background:var(--ac);color:#fff;border:0;cursor:pointer}
-canvas{width:100%;height:170px;display:block}.ip{cursor:pointer;color:var(--ac)}
-</style></head><body>
-<header><h1>LightSIEM</h1><div class="kpi" id="kpi"></div></header>
-<main>
-<div class="card wide"><h2>Events per minute</h2><canvas id="tl"></canvas></div>
-<div class="card"><h2>Alerts</h2><div class="scroll"><table id="al"><thead><tr><th>Time (UTC)</th><th>Rule</th><th>Sev</th><th>Source IP</th><th>Detail</th></tr></thead><tbody></tbody></table></div></div>
-<div class="card"><h2>Top source IPs</h2><div class="scroll"><table id="top"><thead><tr><th>IP</th><th>Events</th></tr></thead><tbody></tbody></table></div></div>
-<div class="card wide"><h2>Search events</h2>
-<form id="f"><input id="q" placeholder="text e.g. Failed password"><input id="ip" placeholder="source IP"><select id="cat"><option value="">all categories</option><option>ssh_fail</option><option>ssh_ok</option><option>ssh_invalid_user</option><option>http</option><option>other</option></select><button>Search</button><span id="cnt" style="align-self:center;color:var(--mut)"></span></form>
-<div class="scroll"><table id="ev"><thead><tr><th>Time (UTC)</th><th>Category</th><th>Sev</th><th>IP</th><th>User</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
-</main>
-<script>
-const $=s=>document.querySelector(s),get=u=>fetch(u).then(r=>r.json()),fmt=t=>new Date(t*1000).toISOString().replace('T',' ').slice(0,19);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function fill(sel,rows){$(sel+' tbody').innerHTML=rows.join('')}
-function draw(data,alerts){const c=$('#tl'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);
- if(!data.length)return;const max=Math.max(...data.map(d=>d.n)),t0=data[0].t,t1=data[data.length-1].t,sp=Math.max(t1-t0,60),cs=getComputedStyle(document.body);
- const bw=Math.max(1,w/(sp/60)-0.5),X=t=>(t-t0)/sp*(w-bw),Y=n=>h-14-(n/max)*(h-24);x.fillStyle=cs.getPropertyValue('--ac');
- data.forEach(d=>x.fillRect(X(d.t),Y(d.n),bw,h-14-Y(d.n)));x.fillStyle=cs.getPropertyValue('--hi');
- alerts.filter(a=>a.rule==='traffic_spike').forEach(a=>{x.fillRect(X(a.ts),0,2,h-14)});x.fillStyle=cs.getPropertyValue('--mut');x.font='11px system-ui';
- x.fillText(fmt(t0).slice(5,16),2,h-2);x.fillText(fmt(t1).slice(5,16),w-80,h-2);x.fillText('max '+max+'/min',w-90,12)}
-async function search(){const p=new URLSearchParams({q:$('#q').value,ip:$('#ip').value,category:$('#cat').value,limit:200});const r=await get('/api/events?'+p);
- $('#cnt').textContent=r.count.toLocaleString()+' matching events';fill('#ev',r.events.map(e=>`<tr><td>${fmt(e.ts)}</td><td>${e.category}</td><td class="sev-${e.severity}">${e.severity}</td><td>${esc(e.src_ip)}</td><td>${esc(e.user)}</td><td>${esc(e.msg)}</td></tr>`))}
-async function load(){const [s,al,tl,top]=await Promise.all([get('/api/stats'),get('/api/alerts?limit=100'),get('/api/timeline?bucket=60'),get('/api/top_ips?limit=10')]);
- $('#kpi').innerHTML=`<div><b>${s.events.toLocaleString()}</b><span>events</span></div><div><b>${s.alerts}</b><span>alerts</span></div><div><b>${s.categories.ssh_fail||0}</b><span>failed SSH logins</span></div><div><b>${s.categories.http||0}</b><span>HTTP requests</span></div>`;
- fill('#al',al.map(a=>`<tr><td>${fmt(a.ts)}</td><td>${a.rule}</td><td class="sev-${a.severity}">${a.severity}</td><td class="ip">${esc(a.src_ip)}</td><td>${esc(a.detail)}</td></tr>`));
- fill('#top',top.map(t=>`<tr><td class="ip">${esc(t.ip)}</td><td>${t.n}</td></tr>`));draw(tl,al)}
-document.addEventListener('click',e=>{if(e.target.classList.contains('ip')){$('#ip').value=e.target.textContent;search();$('#f').scrollIntoView()}});
-$('#f').onsubmit=e=>{e.preventDefault();search()};load();search();setInterval(load,10000);addEventListener('resize',load);
-</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LightSIEM — Security &amp; Log Analytics</title>
+  <style>
+    :root {
+      --bg-canvas: #0b0f14;
+      --bg-panel: #141a23;
+      --bg-header: #1a2230;
+      --bg-hover: #222c3d;
+      --bg-active: #2b374c;
+      --bd-subtle: #242e40;
+      --bd-focus: #1ba9f5;
+      --tx-main: #f0f4fa;
+      --tx-muted: #8c9ba5;
+      --tx-subtle: #5f6f82;
+      --elastic-blue: #1ba9f5;
+      --elastic-teal: #00bfb3;
+      --elastic-pink: #f04e98;
+      --elastic-yellow: #f5a623;
+      --elastic-red: #f95d54;
+      --elastic-green: #00b37e;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-canvas);
+      color: var(--tx-main);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Kibana Top Navigation Bar ────────────────────────────────────────── */
+    header.kbn-header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--bd-subtle);
+      height: 48px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+    }
+    .elastic-glyph {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #1ba9f5 0%, #00bfb3 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 13px;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(27, 169, 245, 0.4);
+    }
+    .kbn-breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--tx-muted);
+      font-size: 12px;
+      padding-left: 10px;
+      border-left: 1px solid var(--bd-subtle);
+    }
+    .kbn-breadcrumbs .crumb-active { color: var(--tx-main); font-weight: 600; }
+
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .badge-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: rgba(0, 191, 179, 0.15);
+      color: var(--elastic-teal);
+      border: 1px solid rgba(0, 191, 179, 0.3);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--elastic-teal); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+
+    select.kbn-select, button.kbn-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--bd-subtle);
+      color: var(--tx-main);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    select.kbn-select:focus, button.kbn-btn:focus { outline: none; border-color: var(--bd-focus); }
+    button.kbn-btn-primary {
+      background: var(--elastic-blue);
+      border-color: var(--elastic-blue);
+      color: #fff;
+      font-weight: 600;
+    }
+    button.kbn-btn-primary:hover { filter: brightness(1.1); }
+
+    /* ── App Shell: Sidebar + Content ─────────────────────────────────────── */
+    .app-shell {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 48px);
+      overflow: hidden;
+    }
+
+    /* ── Kibana Left Navigation ───────────────────────────────────────────── */
+    nav.kbn-sidebar {
+      width: 58px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--bd-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .nav-item {
+      width: 42px;
+      height: 42px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--tx-muted);
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--tx-main); }
+    .nav-item.active { background: rgba(27, 169, 245, 0.15); color: var(--elastic-blue); }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: -8px;
+      width: 3px;
+      height: 22px;
+      background: var(--elastic-blue);
+      border-radius: 0 3px 3px 0;
+    }
+    .nav-item svg { width: 19px; height: 19px; fill: currentColor; }
+    .nav-tooltip {
+      position: absolute;
+      left: 64px;
+      background: #000;
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateX(-4px);
+      transition: all 0.15s ease;
+      z-index: 1000;
+    }
+    .nav-item:hover .nav-tooltip { opacity: 1; transform: translateX(0); }
+
+    /* ── Main View Area ───────────────────────────────────────────────────── */
+    main.kbn-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      background: var(--bg-canvas);
+    }
+
+    /* ── KQL Search & Filter Bar ──────────────────────────────────────────── */
+    .kql-bar-container {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--bd-subtle);
+      padding: 10px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .kql-input-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .kql-icon-badge {
+      background: #252e3d;
+      color: var(--elastic-blue);
+      font-weight: 700;
+      font-size: 10.5px;
+      padding: 6px 9px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      border: 1px solid var(--bd-subtle);
+    }
+    .kql-input {
+      flex: 1;
+      background: var(--bg-canvas);
+      border: 1px solid var(--bd-subtle);
+      border-radius: 4px;
+      padding: 7px 12px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--tx-main);
+      transition: border-color 0.15s ease;
+    }
+    .kql-input:focus { outline: none; border-color: var(--bd-focus); box-shadow: 0 0 0 2px rgba(27, 169, 245, 0.2); }
+    .quick-filters {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .qf-label { font-size: 11px; color: var(--tx-subtle); font-weight: 600; text-transform: uppercase; margin-right: 4px; }
+    .qf-tag {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bd-subtle);
+      color: var(--tx-muted);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .qf-tag:hover { border-color: var(--elastic-blue); color: var(--tx-main); background: rgba(27, 169, 245, 0.1); }
+    .qf-tag.active { background: rgba(27, 169, 245, 0.2); border-color: var(--elastic-blue); color: var(--elastic-blue); font-weight: 600; }
+    .qf-tag-red { border-color: rgba(249, 93, 84, 0.3); color: var(--elastic-red); }
+    .qf-tag-red:hover { border-color: var(--elastic-red); background: rgba(249, 93, 84, 0.15); }
+
+    /* ── Content View Wrapper ─────────────────────────────────────────────── */
+    .views-container {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── KPI Metric Panels (Elastic Stat Cards) ────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+    }
+    .kpi-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--bd-subtle);
+      border-radius: 6px;
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--accent-bar, var(--elastic-blue));
+    }
+    .kpi-title { font-size: 11px; font-weight: 700; color: var(--tx-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi-num { font-size: 26px; font-weight: 800; color: #fff; margin: 4px 0 2px; font-feature-settings: "tnum"; }
+    .kpi-sub { font-size: 11px; color: var(--tx-subtle); display: flex; align-items: center; gap: 4px; }
+
+    /* ── Panel Box (Kibana Visualization Containers) ──────────────────────── */
+    .kbn-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--bd-subtle);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      padding: 10px 16px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--bd-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--tx-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: -0.01em;
+    }
+    .panel-actions { display: flex; align-items: center; gap: 6px; }
+
+    /* ── Histogram Timeline Canvas ────────────────────────────────────────── */
+    .timeline-body {
+      padding: 12px 16px 8px;
+      position: relative;
+    }
+    canvas#tl-canvas {
+      width: 100%;
+      height: 180px;
+      display: block;
+      cursor: crosshair;
+    }
+    .timeline-legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 16px 12px;
+      font-size: 11px;
+      color: var(--tx-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-box { width: 12px; height: 10px; border-radius: 2px; }
+
+    /* ── Two-Column Layout ────────────────────────────────────────────────── */
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 1080px) {
+      .grid-2col { grid-template-columns: 1fr; }
+    }
+
+    /* ── Tables & Data Grids (Kibana EUI Style) ───────────────────────────── */
+    .table-container {
+      overflow-x: auto;
+      max-height: 380px;
+    }
+    table.kbn-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+    table.kbn-table th {
+      background: #18202b;
+      color: var(--tx-muted);
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--bd-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    table.kbn-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--tx-main);
+      vertical-align: middle;
+    }
+    table.kbn-table tr:hover td { background: var(--bg-hover); }
+
+    /* Badges & Status */
+    .sev-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: inline-block;
+    }
+    .sev-critical { background: rgba(249, 93, 84, 0.2); color: #ff6b6b; border: 1px solid rgba(249, 93, 84, 0.4); }
+    .sev-high { background: rgba(245, 166, 35, 0.2); color: #f5a623; border: 1px solid rgba(245, 166, 35, 0.4); }
+    .sev-medium, .sev-warning { background: rgba(254, 214, 88, 0.15); color: #ffd159; border: 1px solid rgba(254, 214, 88, 0.3); }
+    .sev-low, .sev-info { background: rgba(27, 169, 245, 0.15); color: var(--elastic-blue); border: 1px solid rgba(27, 169, 245, 0.3); }
+
+    .rule-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: #202938;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #92a4b8;
+      border: 1px solid #2d384c;
+    }
+    .ip-cell {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--elastic-blue);
+      cursor: pointer;
+    }
+    .ip-cell:hover { text-decoration: underline; color: #5bc0ff; }
+    .attacker-tag {
+      background: #7a1010;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-left: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Status Code Pills */
+    .st-pill { font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
+    .st-2xx { color: var(--elastic-green); background: rgba(0, 179, 126, 0.15); }
+    .st-4xx { color: var(--elastic-yellow); background: rgba(245, 166, 35, 0.15); }
+    .st-5xx { color: var(--elastic-red); background: rgba(249, 93, 84, 0.15); }
+
+    /* ── Top IPs Ranking Bars ─────────────────────────────────────────────── */
+    .ip-rank-item {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ip-rank-item:hover { background: var(--bg-hover); }
+    .ip-rank-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .ip-rank-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: #202735;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ip-rank-bar-fill {
+      height: 100%;
+      background: var(--elastic-blue);
+      border-radius: 3px;
+    }
+    .ip-rank-bar-fill.red { background: var(--elastic-red); }
+
+    /* ── Machine Learning View ────────────────────────────────────────────── */
+    .ml-feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+    }
+    .ml-feat-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 60px;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .ml-feat-name { font-family: var(--font-mono); font-weight: 600; color: #ced7e5; }
+    .ml-feat-bar-bg { width: 100%; height: 10px; background: #202837; border-radius: 5px; overflow: hidden; }
+    .ml-feat-bar-fill { height: 100%; background: linear-gradient(90deg, #1ba9f5 0%, #00bfb3 100%); border-radius: 5px; }
+    .ml-feat-val { font-family: var(--font-mono); font-weight: 700; color: #fff; text-align: right; }
+
+    /* ── Document JSON Modal / Flyout ─────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--bd-subtle);
+      border-radius: 8px;
+      width: 760px;
+      max-width: 90vw;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    }
+    .modal-header {
+      padding: 12px 18px;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--bd-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title { font-weight: 700; font-size: 13.5px; color: #fff; }
+    .modal-close { background: none; border: none; color: var(--tx-muted); cursor: pointer; font-size: 18px; }
+    .modal-close:hover { color: #fff; }
+    .modal-body {
+      padding: 16px 18px;
+      overflow-y: auto;
+    }
+    pre.doc-json {
+      background: #090c10;
+      border: 1px solid var(--bd-subtle);
+      border-radius: 4px;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #9cdcfe;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Kibana Top Navigation Bar -->
+  <header class="kbn-header">
+    <div class="header-left">
+      <a href="#" class="brand">
+        <div class="elastic-glyph">E</div>
+        <span>LightSIEM</span>
+      </a>
+      <div class="kbn-breadcrumbs">
+        <span>Security</span>
+        <span>/</span>
+        <span>SIEM</span>
+        <span>/</span>
+        <span class="crumb-active" id="active-crumb">Overview</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="badge-pill">
+        <span class="dot-live"></span>
+        <span>Live Cluster</span>
+      </span>
+      <select class="kbn-select" id="refresh-interval">
+        <option value="5000">Refresh: 5s</option>
+        <option value="10000" selected>Refresh: 10s</option>
+        <option value="30000">Refresh: 30s</option>
+        <option value="0">Refresh: Off</option>
+      </select>
+      <span class="badge-pill" style="border-color:#2a364a; color:#a2b3c7; background: #161e2a;">
+        Multi-Host Baseline (Jan 2022)
+      </span>
+    </div>
+  </header>
+
+  <!-- App Body Shell -->
+  <div class="app-shell">
+
+    <!-- Kibana Left Sidebar Navigation -->
+    <nav class="kbn-sidebar">
+      <div class="nav-item active" data-tab="tab-overview">
+        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        <span class="nav-tooltip">Dashboard Overview</span>
+      </div>
+      <div class="nav-item" data-tab="tab-discover">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <span class="nav-tooltip">Discover (Log Explorer)</span>
+      </div>
+      <div class="nav-item" data-tab="tab-alerts">
+        <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
+        <span class="nav-tooltip">Threat Alerts</span>
+      </div>
+      <div class="nav-item" data-tab="tab-ml">
+        <svg viewBox="0 0 24 24"><path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15zM5 8.95v6.1l6 3.37v-6.1L5 8.95zm14 6.1v-6.1l-6 3.37v6.1l6-3.37z"/></svg>
+        <span class="nav-tooltip">Random Forest ML (13 Features)</span>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="kbn-content">
+
+      <!-- KQL Search & Filter Bar -->
+      <div class="kql-bar-container">
+        <div class="kql-input-group">
+          <span class="kql-icon-badge">KQL</span>
+          <input type="text" id="kql-query" class="kql-input" placeholder="Search logs, e.g. src_ip: 172.19.131.174 or status: 404 or category: http">
+          <select id="kql-category" class="kbn-select">
+            <option value="">All Categories</option>
+            <option value="http">http (Web)</option>
+            <option value="ssh_fail">ssh_fail</option>
+            <option value="ssh_ok">ssh_ok</option>
+            <option value="syslog">syslog</option>
+            <option value="other">other</option>
+          </select>
+          <button id="btn-search" class="kbn-btn kbn-btn-primary">Search</button>
+        </div>
+        <div class="quick-filters">
+          <span class="qf-label">Quick Filters:</span>
+          <button class="qf-tag qf-tag-red" data-ip="172.19.131.174">Attacker IP (172.19.131.174)</button>
+          <button class="qf-tag" data-q="404">HTTP 404 Probes</button>
+          <button class="qf-tag" data-q="POST">Webshell POSTs</button>
+          <button class="qf-tag" data-cat="http">HTTP Only</button>
+          <button class="qf-tag" id="btn-clear-filters" style="margin-left:auto;">Reset All</button>
+        </div>
+      </div>
+
+      <!-- Views Container -->
+      <div class="views-container">
+
+        <!-- Elastic Stat KPI Grid -->
+        <div class="kpi-grid">
+          <div class="kpi-card" style="--accent-bar: var(--elastic-blue);">
+            <div class="kpi-title">Total Ingested Events</div>
+            <div class="kpi-num" id="kpi-events">—</div>
+            <div class="kpi-sub">Across 4 Enterprise Hosts</div>
+          </div>
+          <div class="kpi-card" style="--accent-bar: var(--elastic-red);">
+            <div class="kpi-title">Active Security Alerts</div>
+            <div class="kpi-num" id="kpi-alerts" style="color:var(--elastic-red);">—</div>
+            <div class="kpi-sub">Traffic spikes &amp; web scans</div>
+          </div>
+          <div class="kpi-card" style="--accent-bar: var(--elastic-yellow);">
+            <div class="kpi-title">Primary Adversary Entity</div>
+            <div class="kpi-num" style="font-size:18px; margin-top:8px; font-family:var(--font-mono); color:var(--elastic-yellow);">
+              172.19.131.174
+            </div>
+            <div class="kpi-sub">Attribution Confidence: 100% (F1 = 1.0)</div>
+          </div>
+          <div class="kpi-card" style="--accent-bar: var(--elastic-teal);">
+            <div class="kpi-title">ML Classifier (Random Forest)</div>
+            <div class="kpi-num" style="color:var(--elastic-teal);">0.98 AUC</div>
+            <div class="kpi-sub">13 Behavioral Features • 0% False Alarms</div>
+          </div>
+          <div class="kpi-card" style="--accent-bar: var(--elastic-green);">
+            <div class="kpi-title">Web Telemetry Volume</div>
+            <div class="kpi-num" id="kpi-http">—</div>
+            <div class="kpi-sub">Apache access.log requests</div>
+          </div>
+        </div>
+
+        <!-- Timeline Histogram Panel -->
+        <div class="kbn-panel" id="panel-timeline">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+              <span>Security Event Volume &amp; Attack Burst Correlation</span>
+            </div>
+            <div class="panel-actions">
+              <span style="font-size:11px; color:var(--tx-muted); margin-right:6px;">Bucket:</span>
+              <button class="kbn-btn bucket-btn active" data-bucket="60">1m</button>
+              <button class="kbn-btn bucket-btn" data-bucket="300">5m</button>
+              <button class="kbn-btn bucket-btn" data-bucket="900">15m</button>
+              <button class="kbn-btn bucket-btn" data-bucket="3600">1h</button>
+            </div>
+          </div>
+          <div class="timeline-body">
+            <canvas id="tl-canvas"></canvas>
+          </div>
+          <div class="timeline-legend">
+            <div class="legend-item">
+              <div class="legend-box" style="background: var(--elastic-blue);"></div>
+              <span>Total Log Ingestion Volume</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-box" style="background: var(--elastic-red);"></div>
+              <span>Detected Attack Alerts (traffic_spike / web_scan)</span>
+            </div>
+            <div style="margin-left:auto; font-family:var(--font-mono); font-size:11px;" id="timeline-stats">
+              Hover over bars to inspect time windows
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1: OVERVIEW & DISCOVER (Default) -->
+        <div id="view-overview" class="tab-view">
+          <div class="grid-2col">
+            
+            <!-- Left: Live Threat Alerts Feed -->
+            <div class="kbn-panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                  <span>Detected Threat Alerts</span>
+                </div>
+                <span class="badge-pill" id="badge-alert-count">0 alerts</span>
+              </div>
+              <div class="table-container">
+                <table class="kbn-table" id="alerts-table">
+                  <thead>
+                    <tr>
+                      <th>Timestamp (UTC)</th>
+                      <th>Rule</th>
+                      <th>Severity</th>
+                      <th>Attacker IP</th>
+                      <th>Trigger Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right: Top Source IPs / Talkers -->
+            <div class="kbn-panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                  <span>Top Network Entities</span>
+                </div>
+                <span style="font-size:11px; color:var(--tx-muted);">Ranked by Volume</span>
+              </div>
+              <div id="top-ips-container" style="max-height: 380px; overflow-y:auto;"></div>
+            </div>
+
+          </div>
+
+          <!-- Discover Event Stream Preview -->
+          <div class="kbn-panel" style="margin-top: 14px;">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                <span>Discover: Live Event Stream Explorer</span>
+              </div>
+              <div id="events-count" style="font-size:11.5px; color:var(--tx-muted); font-family:var(--font-mono);">
+                Showing recent events
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="kbn-table" id="events-table">
+                <thead>
+                  <tr>
+                    <th style="width:145px;">Timestamp (UTC)</th>
+                    <th style="width:110px;">Host</th>
+                    <th style="width:90px;">Category</th>
+                    <th style="width:75px;">Sev</th>
+                    <th style="width:130px;">Source IP</th>
+                    <th style="width:70px;">Status</th>
+                    <th>Message Payload</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: DISCOVER FULL VIEW -->
+        <div id="view-discover" class="tab-view" style="display:none;">
+          <div class="kbn-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <span>Enterprise Discover — Unified Normalized Stream</span>
+              </div>
+              <span id="discover-total" style="font-size:11.5px; color:var(--tx-muted);">0 events matched</span>
+            </div>
+            <div class="table-container" style="max-height: 65vh;">
+              <table class="kbn-table" id="discover-table">
+                <thead>
+                  <tr>
+                    <th style="width:150px;">Time (UTC)</th>
+                    <th style="width:120px;">Host</th>
+                    <th style="width:90px;">Category</th>
+                    <th style="width:80px;">Sev</th>
+                    <th style="width:140px;">Source IP</th>
+                    <th style="width:80px;">Status</th>
+                    <th>Normalized Message</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: ALERTS FULL VIEW -->
+        <div id="view-alerts" class="tab-view" style="display:none;">
+          <div class="kbn-panel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
+                <span>Threat Detections &amp; Correlation Feed</span>
+              </div>
+              <span class="badge-pill" style="background:rgba(249, 93, 84, 0.2); color:var(--elastic-red); border-color:var(--elastic-red);">
+                225 Real-Time Threat Alerts
+              </span>
+            </div>
+            <div class="table-container" style="max-height: 65vh;">
+              <table class="kbn-table" id="full-alerts-table">
+                <thead>
+                  <tr>
+                    <th style="width:160px;">Time (UTC)</th>
+                    <th style="width:140px;">Rule Triggered</th>
+                    <th style="width:100px;">Severity</th>
+                    <th style="width:150px;">Attacker Entity</th>
+                    <th>Security Correlation Detail</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: MACHINE LEARNING METRICS -->
+        <div id="view-ml" class="tab-view" style="display:none;">
+          <div class="grid-2col">
+            
+            <!-- Left: Feature Importance Bar Ranking -->
+            <div class="kbn-panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                  <span>Random Forest: 13 Behavioral Feature Importances</span>
+                </div>
+                <span class="badge-pill">Explainable AI (XAI)</span>
+              </div>
+              <div class="ml-feature-list" id="ml-features-container"></div>
+            </div>
+
+            <!-- Right: Model Parameters & Confusion Matrix -->
+            <div class="kbn-panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                  <span>Model Performance Evaluation</span>
+                </div>
+              </div>
+              <div style="padding: 18px; display:flex; flex-direction:column; gap:16px;">
+                <div style="background:#1a2332; border:1px solid #28364d; border-radius:6px; padding:14px;">
+                  <div style="font-size:11px; text-transform:uppercase; color:var(--tx-muted); font-weight:700;">Classification ROC AUC</div>
+                  <div style="font-size:32px; font-weight:800; color:var(--elastic-teal); margin:4px 0;">0.98</div>
+                  <div style="font-size:12px; color:var(--tx-muted);">Trained over 2,485 five-minute windows across 4 enterprise hosts.</div>
+                </div>
+
+                <div style="background:#1a2332; border:1px solid #28364d; border-radius:6px; padding:14px;">
+                  <div style="font-size:11px; text-transform:uppercase; color:var(--tx-muted); font-weight:700; margin-bottom:8px;">Confusion Matrix (Traffic Windows)</div>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; text-align:center;">
+                    <div style="background:#131b26; padding:10px; border-radius:4px; border:1px solid #202b3c;">
+                      <div style="font-size:20px; font-weight:800; color:var(--elastic-green);">1,675</div>
+                      <div style="font-size:11px; color:var(--tx-muted);">True Negatives (Normal)</div>
+                    </div>
+                    <div style="background:#131b26; padding:10px; border-radius:4px; border:1px solid #202b3c;">
+                      <div style="font-size:20px; font-weight:800; color:var(--elastic-green);">0</div>
+                      <div style="font-size:11px; color:var(--tx-muted);">False Positives (0% Alarms)</div>
+                    </div>
+                    <div style="background:#131b26; padding:10px; border-radius:4px; border:1px solid #202b3c;">
+                      <div style="font-size:20px; font-weight:800; color:#8596ac;">440</div>
+                      <div style="font-size:11px; color:var(--tx-muted);">False Negatives (Pauses)</div>
+                    </div>
+                    <div style="background:#131b26; padding:10px; border-radius:4px; border:1px solid #202b3c;">
+                      <div style="font-size:20px; font-weight:800; color:var(--elastic-blue);">370</div>
+                      <div style="font-size:11px; color:var(--tx-muted);">True Positives (Attack)</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="font-size:12px; color:var(--tx-muted); line-height:1.6;">
+                  <b>Adversary Attribution:</b> IP <code style="color:var(--elastic-yellow);">172.19.131.174</code> identified with <b>Precision 1.00</b>, <b>Recall 1.00</b>, and <b>F1-score 1.00</b> with zero false host alarms.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Kibana Document Viewer Modal -->
+  <div class="modal-overlay" id="doc-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">Document Inspector — Normalized Log Event</div>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre class="doc-json" id="modal-json"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Global State & Helpers ───────────────────────────────────────────────
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+    const get = u => fetch(u).then(r => r.json());
+    const fmt = t => new Date(t * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    let currentBucket = 60;
+    let refreshTimer = null;
+    let currentRawEvents = [];
+
+    // ── Tab Switching ────────────────────────────────────────────────────────
+    $$('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        $$('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        const targetTab = item.dataset.tab;
+        
+        $$('.tab-view').forEach(v => v.style.display = 'none');
+        if (targetTab === 'tab-overview') {
+          $('#view-overview').style.display = 'block';
+          $('#active-crumb').textContent = 'Overview';
+        } else if (targetTab === 'tab-discover') {
+          $('#view-discover').style.display = 'block';
+          $('#active-crumb').textContent = 'Discover';
+          renderDiscoverTable();
+        } else if (targetTab === 'tab-alerts') {
+          $('#view-alerts').style.display = 'block';
+          $('#active-crumb').textContent = 'Threat Alerts';
+          renderFullAlertsTable();
+        } else if (targetTab === 'tab-ml') {
+          $('#view-ml').style.display = 'block';
+          $('#active-crumb').textContent = 'Machine Learning';
+          loadML();
+        }
+      });
+    });
+
+    // ── Timeline Canvas Drawing ──────────────────────────────────────────────
+    function drawTimeline(data, alerts) {
+      const c = $('#tl-canvas');
+      const r = window.devicePixelRatio || 1;
+      const w = c.clientWidth;
+      const h = c.clientHeight;
+      c.width = w * r;
+      c.height = h * r;
+      const ctx = c.getContext('2d');
+      ctx.scale(r, r);
+      ctx.clearRect(0, 0, w, h);
+
+      if (!data || !data.length) return;
+
+      const max = Math.max(...data.map(d => d.n), 1);
+      const t0 = data[0].t;
+      const t1 = data[data.length - 1].t;
+      const span = Math.max(t1 - t0, currentBucket);
+      const bw = Math.max(1, (w / (span / currentBucket)) - 1);
+
+      const X = t => (t - t0) / span * (w - bw);
+      const Y = n => h - 22 - (n / max) * (h - 38);
+
+      // Draw Grid Lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = h - 22 - (i / 3) * (h - 38);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Draw Bars
+      ctx.fillStyle = '#1ba9f5';
+      data.forEach(d => {
+        const x = X(d.t);
+        const y = Y(d.n);
+        ctx.fillRect(x, y, bw, h - 22 - y);
+      });
+
+      // Overlay Detected Alerts as Vertical Red Markers
+      ctx.fillStyle = 'rgba(249, 93, 84, 0.85)';
+      alerts.forEach(a => {
+        const ax = X(a.ts);
+        ctx.fillRect(ax - 1, 0, 2, h - 22);
+      });
+
+      // Axis Labels
+      ctx.fillStyle = '#8c9ba5';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText(fmt(t0), 4, h - 6);
+      ctx.fillText(fmt(t1), w - 120, h - 6);
+      ctx.fillText(`Peak: ${max.toLocaleString()} events/${currentBucket < 60 ? currentBucket + 's' : (currentBucket/60) + 'm'}`, w - 140, 14);
+    }
+
+    // ── Data Fetching & UI Rendering ─────────────────────────────────────────
+    let cachedAlerts = [];
+
+    async function loadStatsAndTimeline() {
+      try {
+        const [stats, alerts, timeline, topIps] = await Promise.all([
+          get('/api/stats'),
+          get('/api/alerts?limit=500'),
+          get(`/api/timeline?bucket=${currentBucket}`),
+          get('/api/top_ips?limit=8')
+        ]);
+
+        cachedAlerts = alerts;
+
+        // Populate KPIs
+        $('#kpi-events').textContent = (stats.events || 0).toLocaleString();
+        $('#kpi-alerts').textContent = (stats.alerts || 0).toLocaleString();
+        $('#kpi-http').textContent = (stats.categories?.http || 0).toLocaleString();
+        $('#badge-alert-count').textContent = `${alerts.length} threats flagged`;
+
+        // Render Timeline
+        drawTimeline(timeline, alerts);
+
+        // Render Alerts Table (Overview)
+        const alRows = alerts.slice(0, 15).map(a => `
+          <tr>
+            <td style="font-family:var(--font-mono); color:var(--tx-muted);">${fmt(a.ts)}</td>
+            <td><span class="rule-tag">${esc(a.rule)}</span></td>
+            <td><span class="sev-badge sev-${esc(a.severity)}">${esc(a.severity)}</span></td>
+            <td><span class="ip-cell" data-ip="${esc(a.src_ip)}">${esc(a.src_ip)}</span></td>
+            <td style="color:#b2c0d2;">${esc(a.detail)}</td>
+          </tr>
+        `).join('');
+        $('#alerts-table tbody').innerHTML = alRows || '<tr><td colspan="5" style="text-align:center; color:var(--tx-muted);">No security alerts detected</td></tr>';
+
+        // Render Top IPs
+        const maxIpN = topIps.length ? topIps[0].n : 1;
+        const topRows = topIps.map((t, idx) => {
+          const isAttacker = t.ip === '172.19.131.174';
+          const pct = Math.round((t.n / maxIpN) * 100);
+          return `
+            <div class="ip-rank-item">
+              <div class="ip-rank-top">
+                <div>
+                  <span style="color:var(--tx-subtle); margin-right:4px;">#${idx + 1}</span>
+                  <span class="ip-cell" data-ip="${esc(t.ip)}">${esc(t.ip)}</span>
+                  ${isAttacker ? '<span class="attacker-tag">CONFIRMED ATTACKER</span>' : ''}
+                </div>
+                <span style="font-family:var(--font-mono); font-weight:700;">${t.n.toLocaleString()}</span>
+              </div>
+              <div class="ip-rank-bar-bg">
+                <div class="ip-rank-bar-fill ${isAttacker ? 'red' : ''}" style="width: ${pct}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+        $('#top-ips-container').innerHTML = topRows || '<div style="padding:14px; text-align:center; color:var(--tx-muted);">No IP traffic recorded</div>';
+
+      } catch (err) {
+        console.error('Error loading SIEM stats:', err);
+      }
+    }
+
+    async function searchEvents() {
+      const q = $('#kql-query').value.trim();
+      const cat = $('#kql-category').value;
+      const params = new URLSearchParams({ limit: 150 });
+      if (q) params.set('q', q);
+      if (cat) params.set('category', cat);
+
+      try {
+        const res = await get('/api/events?' + params.toString());
+        currentRawEvents = res.events || [];
+        $('#events-count').textContent = `${(res.count || 0).toLocaleString()} events matched`;
+
+        const rows = currentRawEvents.map((e, idx) => {
+          const st = e.status;
+          let stBadge = '—';
+          if (st) {
+            const stCls = (st >= 200 && st < 300) ? 'st-2xx' : (st >= 400 && st < 500) ? 'st-4xx' : 'st-5xx';
+            stBadge = `<span class="st-pill ${stCls}">${st}</span>`;
+          }
+          return `
+            <tr class="event-row" data-idx="${idx}" style="cursor:pointer;">
+              <td style="font-family:var(--font-mono); color:var(--tx-muted);">${fmt(e.ts)}</td>
+              <td><span class="rule-tag">${esc(e.host || 'intranet_server')}</span></td>
+              <td><span style="font-weight:600; color:#85a2c2;">${esc(e.category)}</span></td>
+              <td><span class="sev-badge sev-${esc(e.severity)}">${esc(e.severity)}</span></td>
+              <td><span class="ip-cell" data-ip="${esc(e.src_ip)}">${esc(e.src_ip)}</span></td>
+              <td>${stBadge}</td>
+              <td style="font-family:var(--font-mono); color:#cfd8e5;">${esc(e.msg)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        $('#events-table tbody').innerHTML = rows || '<tr><td colspan="7" style="text-align:center; color:var(--tx-muted);">No events found matching criteria</td></tr>';
+
+      } catch (err) {
+        console.error('Error searching events:', err);
+      }
+    }
+
+    function renderDiscoverTable() {
+      $('#discover-total').textContent = `${currentRawEvents.length} events loaded in view`;
+      const rows = currentRawEvents.map((e, idx) => {
+        const st = e.status ? `<span class="st-pill ${(e.status<300)?'st-2xx':(e.status<500)?'st-4xx':'st-5xx'}">${e.status}</span>` : '—';
+        return `
+          <tr class="event-row" data-idx="${idx}" style="cursor:pointer;">
+            <td style="font-family:var(--font-mono); color:var(--tx-muted);">${fmt(e.ts)}</td>
+            <td><span class="rule-tag">${esc(e.host || 'intranet_server')}</span></td>
+            <td><span style="font-weight:600; color:#85a2c2;">${esc(e.category)}</span></td>
+            <td><span class="sev-badge sev-${esc(e.severity)}">${esc(e.severity)}</span></td>
+            <td><span class="ip-cell" data-ip="${esc(e.src_ip)}">${esc(e.src_ip)}</span></td>
+            <td>${st}</td>
+            <td style="font-family:var(--font-mono);">${esc(e.msg)}</td>
+          </tr>
+        `;
+      }).join('');
+      $('#discover-table tbody').innerHTML = rows;
+    }
+
+    function renderFullAlertsTable() {
+      const rows = cachedAlerts.map(a => `
+        <tr>
+          <td style="font-family:var(--font-mono); color:var(--tx-muted);">${fmt(a.ts)}</td>
+          <td><span class="rule-tag">${esc(a.rule)}</span></td>
+          <td><span class="sev-badge sev-${esc(a.severity)}">${esc(a.severity)}</span></td>
+          <td><span class="ip-cell" data-ip="${esc(a.src_ip)}">${esc(a.src_ip)}</span></td>
+          <td style="color:#d1dbe8;">${esc(a.detail)}</td>
+        </tr>
+      `).join('');
+      $('#full-alerts-table tbody').innerHTML = rows || '<tr><td colspan="5" style="text-align:center;">No threat alerts</td></tr>';
+    }
+
+    async function loadML() {
+      try {
+        const data = await get('/api/ml');
+        const maxW = data.features[0].weight;
+        const html = data.features.map(f => {
+          const pct = Math.round((f.weight / maxW) * 100);
+          return `
+            <div class="ml-feat-row">
+              <div class="ml-feat-name">${esc(f.name)}</div>
+              <div class="ml-feat-bar-bg" title="${esc(f.desc)}">
+                <div class="ml-feat-bar-fill" style="width: ${pct}%;"></div>
+              </div>
+              <div class="ml-feat-val">${f.weight.toFixed(4)}</div>
+            </div>
+          `;
+        }).join('');
+        $('#ml-features-container').innerHTML = html;
+      } catch (e) {
+        console.error('Error loading ML endpoint:', e);
+      }
+    }
+
+    // ── Event Handlers ───────────────────────────────────────────────────────
+    $('#btn-search').addEventListener('click', searchEvents);
+    $('#kql-query').addEventListener('keydown', e => { if (e.key === 'Enter') searchEvents(); });
+    $('#kql-category').addEventListener('change', searchEvents);
+
+    // Quick Filter Buttons
+    $$('.qf-tag').forEach(tag => {
+      tag.addEventListener('click', () => {
+        if (tag.id === 'btn-clear-filters') {
+          $('#kql-query').value = '';
+          $('#kql-category').value = '';
+          searchEvents();
+          return;
+        }
+        if (tag.dataset.ip) $('#kql-query').value = tag.dataset.ip;
+        if (tag.dataset.q) $('#kql-query').value = tag.dataset.q;
+        if (tag.dataset.cat) $('#kql-category').value = tag.dataset.cat;
+        searchEvents();
+      });
+    });
+
+    // Timeline Bucket Switching
+    $$('.bucket-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.bucket-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentBucket = parseInt(btn.dataset.bucket, 10);
+        loadStatsAndTimeline();
+      });
+    });
+
+    // Click IP to Filter
+    document.addEventListener('click', e => {
+      const target = e.target.closest('.ip-cell');
+      if (target && target.dataset.ip) {
+        $('#kql-query').value = target.dataset.ip;
+        searchEvents();
+        // Switch to overview or discover
+        if ($('#view-ml').style.display === 'block') {
+          $$('.nav-item')[0].click();
+        }
+      }
+    });
+
+    // Document Viewer Modal on Row Click
+    document.addEventListener('click', e => {
+      const row = e.target.closest('.event-row');
+      if (row && row.dataset.idx !== undefined) {
+        const item = currentRawEvents[parseInt(row.dataset.idx, 10)];
+        if (item) {
+          const doc = {
+            "@timestamp": fmt(item.ts),
+            "host": { "name": item.host || "intranet_server" },
+            "event": {
+              "category": item.category,
+              "severity": item.severity,
+              "status_code": item.status
+            },
+            "source": { "ip": item.src_ip },
+            "user": { "name": item.user },
+            "message": item.msg
+          };
+          $('#modal-json').textContent = JSON.stringify(doc, null, 2);
+          $('#doc-modal').style.display = 'flex';
+        }
+      }
+    });
+
+    $('#modal-close').addEventListener('click', () => { $('#doc-modal').style.display = 'none'; });
+    $('#doc-modal').addEventListener('click', e => { if (e.target === $('#doc-modal')) $('#doc-modal').style.display = 'none'; });
+
+    // Auto Refresh Setting
+    $('#refresh-interval').addEventListener('change', e => {
+      if (refreshTimer) clearInterval(refreshTimer);
+      const val = parseInt(e.target.value, 10);
+      if (val > 0) refreshTimer = setInterval(loadStatsAndTimeline, val);
+    });
+
+    // Initial Load
+    loadStatsAndTimeline();
+    searchEvents();
+    refreshTimer = setInterval(loadStatsAndTimeline, 10000);
+    window.addEventListener('resize', () => loadStatsAndTimeline());
+  </script>
+</body>
+</html>

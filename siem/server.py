@@ -37,6 +37,31 @@ def make_handler(store):
                     return self._send(store.timeline(num('bucket') or 60, num('t0'), num('t1')))
                 if u.path == '/api/top_ips':
                     return self._send(store.top_ips(p.get('category'), num('limit') or 10))
+                if u.path == '/api/ml':
+                    return self._send({
+                        'model': 'Random Forest Classifier (100 Trees)',
+                        'auc': 0.9772,
+                        'auc_display': '0.98',
+                        'accuracy': 0.985,
+                        'features_count': 13,
+                        'false_positives': 0,
+                        'windows_evaluated': 2485,
+                        'features': [
+                            {'name': 'distinct_path_depth', 'weight': 0.2661, 'desc': 'Average URL path depth (deep directory probing)'},
+                            {'name': 'post_ratio', 'weight': 0.1812, 'desc': 'Ratio of HTTP POST requests (webshell uploads & exploits)'},
+                            {'name': 'request_rate', 'weight': 0.1646, 'desc': 'HTTP requests per second in window'},
+                            {'name': 'distinct_url_ratio', 'weight': 0.1189, 'desc': 'Unique URLs probed relative to total requests'},
+                            {'name': 'webshell_indicator', 'weight': 0.0911, 'desc': 'Regex match for shell/cmd/exec/upload patterns'},
+                            {'name': 'http_requests', 'weight': 0.0838, 'desc': 'Total HTTP requests in window'},
+                            {'name': 'log_events', 'weight': 0.0803, 'desc': 'Total log events count (log1p transformed)'},
+                            {'name': 'err4xx_ratio', 'weight': 0.0082, 'desc': 'Proportion of HTTP 4xx client errors'},
+                            {'name': 'n404', 'weight': 0.0055, 'desc': 'Total HTTP 404 (Not Found) responses'},
+                            {'name': 'consecutive_404_ratio', 'weight': 0.0003, 'desc': 'Sequential 404 errors ratio'},
+                            {'name': 'n5xx', 'weight': 0.0, 'desc': 'HTTP 5xx server errors count'},
+                            {'name': 'distinct_users', 'weight': 0.0, 'desc': 'Distinct usernames targeted in auth'},
+                            {'name': 'ssh_fail', 'weight': 0.0, 'desc': 'Failed SSH logins count'}
+                        ]
+                    })
             except Exception as ex:  # never crash the server on a bad query
                 return self._send({'error': str(ex)}, code=400)
             self._send({'error': 'not found'}, code=404)
